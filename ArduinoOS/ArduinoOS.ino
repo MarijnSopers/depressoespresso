@@ -1,31 +1,9 @@
-/*
-• kan commando’s inlezen vanaf de command line via de seriele terminal. ¨
-• kan programma’s in de voorgeschreven bytecode (opgeslagen als bestanden in het bestandssysteem)
-uitvoeren op de Arduino Uno of Nano.
-• beheert een geheugen van tenminste 256 bytes.
-• kan tenminste 25 variabelen van het type CHAR (1 byte), INT (2 bytes), FLOAT (4 bytes) of STRING (zeroterminated, variabel aantal bytes) in het geheugen houden, waarvan de waarde gezet, gelezen en gemuteerd kan worden.
-• beheert een bestandssysteem ter grootte van het beschikbare EEPROM-geheugen.
-• kan hierin tenminste 10 bestanden opslaan, teruglezen en wissen met bestandsnamen van maximaal 12
-tekens (inclusief terminating zero).
-• kan de nog beschikbare hoeveelheid opslagruimte weergeven.
-• kan tot 10 verschillende processen bijhouden die gestart, gepauzeerd, hervat en beeindigd kunnen wor- ¨
-den.
-• houdt bij van alle variabelen bij welk proces ze horen, en geeft het geheugen dat de variabelen innemen
-vrij als het proces stopt.
-• kan per proces 1 bestand tegelijk lezen of schrijven.
-• houdt per proces een stack bij van tenminste 32 bytes
-*/
-
 #include <EEPROM.h>
 
 #define BUFSIZE 12
 #define FILENAMESIZE 12
 #define MAX_FILES 10
-
-typedef struct {
-    char name[BUFSIZE];
-    void (*func)();
-} commandType;
+#define EEPROM_SIZE 1024 
 
 typedef struct {
     char name[FILENAMESIZE];
@@ -34,6 +12,12 @@ typedef struct {
 } fileType;
 
 fileType FAT[MAX_FILES];
+byte noOfFiles = 0;
+
+typedef struct {
+    char name[BUFSIZE];
+    void (*func)();
+} commandType;
 
 void help() {
     Serial.println(F("Here is a list with all available commands:"));
@@ -50,7 +34,7 @@ void help() {
     Serial.println(F("    kill [id]                   stops the process with processId id."));
 }
 
-//array of available table command
+// Array of available commands
 static commandType command[] = {
     {"help", &help},
     {"store", &store},
@@ -67,11 +51,22 @@ static commandType command[] = {
 
 static int commandLength = sizeof(command) / sizeof(commandType);
 
+void writeFAT(int index, fileType file) {
+    int start = 1 + sizeof(fileType) * index;
+    EEPROM.put(start, file);
+}
+
+fileType readFATEntry(int index) {
+    fileType entry;
+    int addr = sizeof(fileType) * index + 1;
+    EEPROM.get(addr, entry);
+    return entry;
+}
 
 void store() {
     Serial.println("Executing store command");
 
-    char filename[BUFSIZE] = "";
+    char filename[FILENAMESIZE] = "";
     if (!readToken(filename)) { 
         Serial.println("Error: Unknown filename");
         return;
@@ -96,49 +91,209 @@ void store() {
         return;
     }
 
-    // Now you have filename and fileSize, you can proceed to store the file
-    // Implement the file storage logic here
+    char content[BUFSIZE] = "";
+    int contentIndex = 0;
+
+    // Read content until the specified size is reached or until buffer is full
+    while (contentIndex < fileSize) {
+        if (!Serial.available()) {
+            continue; // Wait for data to be available
+        }
+        char c = Serial.read();
+        content[contentIndex++] = c;
+    }
+
+    content[fileSize] = '\0'; // Null-terminate the content
+
+    Serial.print("Content: ");
+    Serial.println(content);
+
+    // Check if the content length is greater than the specified size
+    if (strlen(content) != fileSize) {
+        Serial.println("Error: Content size does not match specified file size");
+        return;
+    }
+    
+    // Check if there is enough space in the FAT
+    if (noOfFiles >= MAX_FILES) {
+        Serial.println("Error: Maximum number of files reached");
+        return;
+    }
+
+    // Check if the file already exists
+    if (findFile(filename) != -1) {
+        Serial.println("Error: File already exists");
+        return;
+    }
+
+    // Allocate a new file entry in the FAT
+    fileType newFile;
+    strncpy(newFile.name, filename, FILENAMESIZE - 1); // Ensure filename doesn't exceed FILENAMESIZE
+    newFile.size = fileSize;
+    writeFAT(noOfFiles, newFile);
+    noOfFiles++;
+
+    // Write file content to EEPROM
+    int dataAddress = newFile.start;
+    for (int i = 0; i < fileSize; i++) {
+        EEPROM.write(dataAddress++, content[i]);
+    }
+
+    Serial.println("File stored successfully");
 }
 
-void retrieve(char* filename){
+
+void retrieve() {
+    Serial.println("Executing retrieve command");
+
+    char filename[FILENAMESIZE] = "";
+    if (!readToken(filename)) {
+        Serial.println("Error: Unknown filename");
+        return;
+    }
+
+    Serial.print("Filename: ");
+    Serial.println(filename);
+
+    int fileIndex = findFile(filename);
+    if (fileIndex == -1) {
+        Serial.println("Error: File not found");
+        return;
+    }
+
+    fileType file = readFATEntry(fileIndex);
+    Serial.print("File size: ");
+    Serial.println(file.size);
+
+    Serial.print("Content: ");
+    for (int i = 0; i < file.size; i++) {
+        char c = EEPROM.read(file.start + i);
+        Serial.print(c);
+    }
+    Serial.println();
 }
 
-void erase(const char* filename) {
+
+void erase() {
+    Serial.println("Executing erase command");
+
+    char filename[FILENAMESIZE] = "";
+    if (!readToken(filename)) {
+        Serial.println("Error: Unknown filename");
+        return;
+    }    
+    Serial.print("Filename: ");
+    Serial.println(filename);
+
+    // Find the index of the file in the FAT
+    int fileIndex = findFile(filename);
+
+    // Check if the file exists
+    if (fileIndex == -1) {
+        Serial.println("Error: File not found");
+        return;
+    }
+
+    // Clear the content of the file from EEPROM
+    int startAddress = FAT[fileIndex].start;
+    int endAddress = startAddress + FAT[fileIndex].size;
+    for (int i = startAddress; i < endAddress; ++i) {
+        EEPROM.write(i, 0); // Clear each byte of the content
+    }
+
+    // Shift the remaining files in the FAT to fill the gap
+    for (int i = fileIndex; i < noOfFiles - 1; ++i) {
+        FAT[i] = FAT[i + 1];
+        // Update start address of the shifted file
+        FAT[i].start -= FAT[fileIndex].size;
+    }
+
+    // Decrement the file count
+    noOfFiles--;
+
+    Serial.println("File erased successfully");
 }
 
+
+
+
+// Find a file in the FAT by name
 int findFile(const char* filename) {
+    for (int i = 0; i < noOfFiles; ++i) {
+        fileType file = readFATEntry(i);
+        if (strcmp(filename, file.name) == 0) {
+            return i; // Return index if found
+        }
+    }
+    return -1; // Return -1 if not found
+}
+
+// Find space in the EEPROM
+int findSpace(int size) {
+    // Sort FAT by start position
+    qsort(FAT, noOfFiles, sizeof(fileType), [](const void* a, const void* b) {
+        return ((fileType*)a)->start - ((fileType*)b)->start;
+    });
+
+    int prevEnd = 0;
+    for (int i = 0; i < noOfFiles; i++) {
+        int gapStart = prevEnd;
+        int gapEnd = FAT[i].start;
+        if ((gapEnd - gapStart) >= size) {
+            return gapStart;
+        }
+        prevEnd = FAT[i].start + FAT[i].size;
+    }
+
+    if ((EEPROM_SIZE - prevEnd) >= size) {
+        return prevEnd;
+    }
+
+    return -1; // No space found
 }
 
 void files() {
-    Serial.println("List of files:");
+    Serial.println(F("This is a list with all files:"));
+    Serial.println(F("    name                        size"));
+    for (int FATEntryId = 0; FATEntryId < noOfFiles; FATEntryId++) {
+        Serial.print(F("    "));
+        Serial.print(readFATEntry(FATEntryId).name);
+        Serial.print(F("                        "));
+        Serial.println(readFATEntry(FATEntryId).size);
+    }
+    Serial.print(noOfFiles);
+    Serial.println(F(" result(s)"));
 }
 
 void freespace() {
+    // Free space calculation
 }
 
-void run (){
+void run() {
     Serial.println("Executing run command");
-
 }
 
-void list (){
-    Serial.println("Executing list command");
-
+void list() {
+    Serial.println("List of files:");
+    for (int i = 0; i < noOfFiles; ++i) {
+        fileType file = readFATEntry(i);
+        Serial.print("Name: ");
+        Serial.print(file.name);
+        Serial.print("\tSize: ");
+        Serial.println(file.size);
+    }
 }
 
-void suspend (){
+void suspend() {
     Serial.println("Executing suspend command");
-
 }
 
-void resume (){
+void resume() {
     Serial.println("Executing resume command");
-
 }
 
-void kill (){
+void kill() {
     Serial.println("Executing kill command");
-
 }
 
 void unknownCommand() {
@@ -148,62 +303,39 @@ void unknownCommand() {
     }
 }
 
-void processCommand(char* buffer) {
-    for (int i = 0; i < sizeof(command) / sizeof(commandType); ++i) {
-        if (strcmp(buffer, command[i].name) == 0) {
-            command[i].func();
-            return;
-        }
-    }
-    Serial.println("Unknown command. Available commands:");
-    for (int i = 0; i < sizeof(command) / sizeof(commandType); ++i) {
-        Serial.println(command[i].name);
-    }
-}
-
 bool readToken(char* buffer) {
-    static int index = 0;
-    static bool commandMode = true; // Flag to indicate if we're reading a command
-    bool tokenComplete = false;
+    static int pos = 0;
+    bool tokenRead = false;
     
-    while (Serial.available() && !tokenComplete) {
+    while (Serial.available() > 0) {
         char c = Serial.read();
-        
-        // Stop reading if we encounter whitespace or newline
         if (c == ' ' || c == '\n' || c == '\r') {
-            if (index == 0) {
-                // Skip leading whitespace
-                continue;
-            } else {
-                buffer[index] = '\0';
-                index = 0;
-                if (commandMode) {
-                    commandMode = false; // Switch to argument mode after reading the command
-                } else {
-                    tokenComplete = true;
-                }
+            if (pos > 0) {
+                buffer[pos] = '\0';
+                pos = 0;
+                tokenRead = true;
+                break;
             }
         } else {
-            buffer[index++] = c;
-            if (index >= BUFSIZE - 1) {
-                buffer[index] = '\0';
-                index = 0;
-                tokenComplete = true;
+            buffer[pos++] = c;
+            if (pos >= BUFSIZE - 1) {
+                buffer[pos] = '\0';
+                pos = 0;
+                tokenRead = true;
+                break;
             }
         }
     }
+    delay(10);
     
-    return tokenComplete;
+    return tokenRead;
 }
-
-
-
 
 void clearSerialBuffer() {
     delayMicroseconds(1042);
     while (Serial.available()) {
-    Serial.read();
-    delayMicroseconds(1042);
+        Serial.read();
+        delayMicroseconds(1042);
     }
 }
 
@@ -214,9 +346,17 @@ void setup() {
 
 void loop() {
     static char buffer[BUFSIZE];
-    
+
     if (readToken(buffer)) {
-        processCommand(buffer);
+        char *commandToken = strtok(buffer, " ");
+        if (commandToken != NULL) {
+            for (int i = 0; i < commandLength; i++) {
+                if (strcmp(commandToken, command[i].name) == 0) {
+                    command[i].func();
+                    return;
+                }
+            }
+            help();
+        }
     }
 }
-
