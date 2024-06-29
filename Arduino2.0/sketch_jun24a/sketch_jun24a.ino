@@ -1,9 +1,21 @@
 #include <EEPROM.h>
+#include <IEEE754tools.h>
 
 #define BUFSIZE 12
 #define FILENAMESIZE 12
 #define MAX_FILES 10
 #define EEPROM_SIZE 1024
+
+#define MAXPROCESSES 10
+#define STACKSIZE 32
+#define MEMORYSIZE 256
+
+#define MAX_VARS 25
+
+#define CHAR_TYPE 0
+#define INT_TYPE 1
+#define FLOAT_TYPE 2
+#define STRING_TYPE 3
 
 typedef struct {
     char name[FILENAMESIZE];
@@ -16,8 +28,23 @@ typedef struct {
     void (*func)();
 } commandType;
 
+typedef struct {
+    char name[BUFSIZE]; 
+    int type;                   
+    int address;                  
+    int size;                   
+    int processID;              
+} MemoryTableEntry;
+
 fileType FAT[MAX_FILES];
 EERef noOfFiles = EEPROM[160];
+
+MemoryTableEntry memoryTable[MAX_VARS];
+int noOfVars = 0;
+byte memory[MEMORYSIZE];
+
+byte stack[STACKSIZE];
+byte sp = 0;
 
 void help();
 void store();
@@ -30,7 +57,7 @@ void list();
 void suspend();
 void resume();
 void kill();
-void deleteAllFiles();
+void deleteAllFiles(); 
 void show();
 
 static commandType command[] = {
@@ -55,7 +82,7 @@ char inputBuffer[BUFSIZE];
 int bufferIndex = 0;
 
 void setup() {
-    Serial.begin(9600);
+    Serial.begin(9600); 
     Serial.println(noOfFiles);
     Serial.println("ArduinOS 1.0 ready");
     bufferIndex = 0;
