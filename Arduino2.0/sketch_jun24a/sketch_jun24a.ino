@@ -1,5 +1,6 @@
 #include <EEPROM.h>
 #include <IEEE754tools.h>
+#include "instruction_set.h"
 
 #define BUFSIZE 12
 #define FILENAMESIZE 12
@@ -11,11 +12,6 @@
 #define MEMORYSIZE 256
 
 #define MAX_VARS 25
-
-#define CHAR_TYPE 0
-#define INT_TYPE 1
-#define FLOAT_TYPE 2
-#define STRING_TYPE 3
 
 typedef struct {
     char name[FILENAMESIZE];
@@ -87,6 +83,222 @@ void setup() {
     Serial.println("ArduinOS 1.0 ready");
     bufferIndex = 0;
     initializeFAT();
+}
+
+// Stack operations
+void pushByte(byte b) {
+    stack[sp++] = b;
+}
+
+byte popByte() {
+    return stack[--sp];
+}
+
+void pushInt(int val) {
+    pushByte(lowByte(val));
+    pushByte(highByte(val));
+    pushByte(INT);
+}
+
+int popInt() {
+    byte high = popByte();
+    byte low = popByte();
+    return word(low, high);
+}
+
+void pushFloat(float val) {
+    byte *b = (byte *)&val;
+    for (int i = 3; i >= 0; i--) {
+        pushByte(b[i]);
+    }
+    pushByte(FLOAT);
+}
+
+float popFloat() {
+    byte b[4];
+    for (int i = 0; i < 4; i++) {
+        b[i] = popByte();
+    }
+    float *pf = (float *)b;
+    return *pf;
+}
+
+void pushString(const char *str) {
+    int len = strlen(str) + 1;
+    for (int i = len - 1; i >= 0; i--) {
+        pushByte(str[i]);
+    }
+    pushByte(len);
+    pushByte(STRING);
+}
+
+char *popString() {
+    byte type = popByte();
+    int len = popByte();
+    sp -= len; 
+    return (char *)&stack[sp];
+}
+
+// Memory management
+void storeVariable(char name, int processID) {
+    if (noOfVars >= MAX_VARS) {
+        Serial.println("Error: Memory table full");
+        return;
+    }
+    
+    int idx = -1;
+    for (int i = 0; i < noOfVars; i++) {
+        if (memoryTable[i].name == name && memoryTable[i].processID == processID) {
+            idx = i;
+            break;
+        }
+    }
+    
+    if (idx != -1) { // Variable exists, remove it
+        for (int i = idx; i < noOfVars - 1; i++) {
+            memoryTable[i] = memoryTable[i + 1];
+        }
+        noOfVars--;
+    }
+    
+    byte type = popByte();
+    int size;
+    switch (type) {
+        case CHAR:
+            size = 1;
+            break;
+        case INT:
+            size = 2;
+            break;
+        case FLOAT:
+            size = 4;
+            break;
+        case STRING:
+            size = popByte();
+            sp++; // Skip the type byte
+            break;
+    }
+    
+    int address = -1;
+    for (int i = 0; i < MEMORYSIZE; i++) {
+        bool available = true;
+        for (int j = 0; j < noOfVars; j++) {
+            if (i >= memoryTable[j].address && i < (memoryTable[j].address + memoryTable[j].size)) {
+                available = false;
+                break;
+            }
+        }
+        if (available) {
+            address = i;
+            break;
+        }
+    }
+    
+    if (address == -1 || (address + size) > MEMORYSIZE) {
+        Serial.println("Error: Not enough memory");
+        return;
+    }
+    
+    memoryTable[noOfVars] = {name, type, address, size, processID};
+    noOfVars++;
+    
+    for (int i = 0; i < size; i++) {
+        memory[address + i] = popByte();
+    }
+}
+
+void retrieveVariable(char name, int processID) {
+    for (int i = 0; i < noOfVars; i++) {
+        if (memoryTable[i].name == name && memoryTable[i].processID == processID) {
+            int address = memoryTable[i].address;
+            int size = memoryTable[i].size;
+            for (int j = 0; j < size; j++) {
+                pushByte(memory[address + j]);
+            }
+            pushByte(memoryTable[i].type);
+            return;
+        }
+    }
+    Serial.println("Error: Variable not found");
+}
+
+void deleteVariables(int processID) {
+    for (int i = 0; i < noOfVars; i++) {
+        if (memoryTable[i].processID == processID) {
+            for (int j = i; j < noOfVars - 1; j++) {
+                memoryTable[j] = memoryTable[j + 1];
+            }
+            noOfVars--;
+            i--; // Check the new entry at this position
+        }
+    }
+}
+
+// Process management
+void createProcess(const char* name) {
+    if (noOfProcesses >= MAXPROCESSES) {
+        Serial.println("Error: Maximum number of processes reached");
+        return;
+    }
+
+    int processID = noOfProcesses;
+    strncpy(processes[processID].name, name, FILENAMESIZE);
+    processes[processID].processId = processID;
+    processes[processID].state = 0; // 0 = ready, 1 = running, 2 = suspended, etc.
+    processes[processID].pc = 0;
+    processes[processID].sp = 0;
+
+    noOfProcesses++;
+    Serial.print("Process created: ");
+    Serial.println(name);
+}
+
+void listProcesses() {
+    Serial.println("Listing processes:");
+    for (int i = 0; i < noOfProcesses; i++) {
+        Serial.print("Process ID: ");
+        Serial.print(processes[i].processId);
+        Serial.print(", Name: ");
+        Serial.print(processes[i].name);
+        Serial.print(", State: ");
+        Serial.print(processes[i].state);
+        Serial.print(", PC: ");
+        Serial.print(processes[i].pc);
+        Serial.print(", SP: ");
+        Serial.println(processes[i].sp);
+    }
+}
+
+void suspendProcess(int processID) {
+    if (processID < 0 || processID >= noOfProcesses) {
+        Serial.println("Error: Invalid process ID");
+        return;
+    }
+    processes[processID].state = 2; // Suspended
+    Serial.print("Process suspended: ");
+    Serial.println(processes[processID].name);
+}
+
+void resumeProcess(int processID) {
+    if (processID < 0 || processID >= noOfProcesses) {
+        Serial.println("Error: Invalid process ID");
+        return;
+    }
+    processes[processID].state = 0; // Ready
+    Serial.print("Process resumed: ");
+    Serial.println(processes[processID].name);
+}
+
+void killProcess(int processID) {
+    if (processID < 0 || processID >= noOfProcesses) {
+        Serial.println("Error: Invalid process ID");
+        return;
+    }
+    for (int i = processID; i < noOfProcesses - 1; i++) {
+        processes[i] = processes[i + 1];
+    }
+    noOfProcesses--;
+    Serial.println("Process killed");
 }
 
 void help() {
