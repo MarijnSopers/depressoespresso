@@ -13,6 +13,7 @@
 
 #define MAX_VARS 25
 
+
 typedef struct {
     char name[FILENAMESIZE];
     int start;
@@ -30,7 +31,16 @@ typedef struct {
     int address;                  
     int size;                   
     int processID;              
-} MemoryTableEntry;
+} MemoryTableEntry; 
+
+typedef struct {
+    char name[FILENAMESIZE];
+    int processId;
+    byte state;
+    int pc;
+    int sp;
+    byte stack[STACKSIZE];
+} processType;
 
 fileType FAT[MAX_FILES];
 EERef noOfFiles = EEPROM[160];
@@ -41,6 +51,9 @@ byte memory[MEMORYSIZE];
 
 byte stack[STACKSIZE];
 byte sp = 0;
+
+processType processes[MAXPROCESSES];
+int noOfProcesses = 0;
 
 void help();
 void store();
@@ -357,20 +370,27 @@ void store() {
     FAT[index].size = fileSize;
     strncpy(FAT[index].name, filename, FILENAMESIZE);
 
+    Serial.print("File content will be stored starting at EEPROM address: ");
+    Serial.println(freeSpace);
+
     writeFATEntry(index);
 
     char content[fileSize];
+    //Serial.println(content);
     for (int i = 0; i < fileSize; i++) {
         while (!Serial.available());
         content[i] = Serial.read();
+        Serial.print(content[i]);
+        delay(1);
         EEPROM.write(freeSpace + i, content[i]);
     }
 
     noOfFiles++;
     EEPROM.write(160, noOfFiles);
-
+    Serial.println("");
     Serial.println("File stored successfully");
 }
+
 
 int findEmptyFATEntry() {
     for (int i = 0; i < MAX_FILES; i++) {
@@ -401,7 +421,13 @@ int findFreeSpace(int fileSize) {
 
 void writeFATEntry(int index) {
     EEPROM.put(index * sizeof(fileType), FAT[index]);
+
+    Serial.print("FAT entry ");
+    Serial.print(index);
+    Serial.print(" written at EEPROM address: ");
+    Serial.println(index * sizeof(fileType));
 }
+
 
 void initializeFAT() {
     for (int i = 0; i < MAX_FILES; i++) {
