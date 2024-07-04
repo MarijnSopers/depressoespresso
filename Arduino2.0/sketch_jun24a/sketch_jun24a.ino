@@ -96,23 +96,22 @@ void setup() {
     Serial.println("ArduinOS 1.0 ready");
     bufferIndex = 0;
     noOfVars = 0;
-    initializeFAT();
-
-
-    
+    initializeFAT();    
 }
 
 
 // Push and Pop functions
 void pushByte(byte b) {
-    if (stackPointer < STACKSIZE) {
+  //Serial.printnl("TEST1");
+    if (stackPointer < STACKSIZE -1) {
+      //Serial.printnl("TEST2");
         stack[stackPointer++] = b;
         Serial.print("Pushed byte: ");
         Serial.println(b, HEX);
         Serial.print("Stack pointer is now: ");
         Serial.println(stackPointer);
     } else {
-        Serial.println("Error: Stack overflow");
+        //Serial.println("Error: Stack overflow");
     }
 }
 
@@ -125,7 +124,7 @@ byte popByte() {
         Serial.println(stackPointer);
         return b;
     } else {
-        Serial.println("Error: Stack underflow");
+        //Serial.println("Error: Stack underflow");
         return 0;
     }
 }
@@ -168,24 +167,40 @@ float popFloat() {
 }
 
 void pushString(const char *s) {
-    int length = strlen(s) + 1; // include the terminating zero
-    for (int i = length - 1; i >= 0; i--) {
+    int length = strlen(s);
+    for (int i = 0; i < length; i++) {
         pushByte(s[i]);
     }
-    pushByte(length);
-    pushByte(STRING);
+    pushByte(length); // Push the length of the string
+    pushByte(STRING); // Push the type identifier
 }
 
+
+
+// void popString() {
+//     int length = popByte();
+//     char *s = new char[length];
+//     for (int i = length - 1; i >= 0; --i) {
+//         s[i] = popByte();
+//     }
+//     return s;
+// }
 char* popString() {
-    int length = popByte();
-    char *s = new char[length];
-    for (int i = length - 1; i >= 0; i--) {
-        s[i] = popByte();
+
+    int length = popByte(); // Read the length of the string
+    //Serial.println(length);
+    char *s = (char*)malloc(length + 1); // Allocate memory for the string (+1 for null terminator)
+    if (s == NULL) {
+        Serial.println("Error: Memory allocation failed");
+        return NULL;
     }
+    for (int i = 0; i < length; i++) {
+        Serial.println(i);
+        s[i] = popByte(); // Read each character from the stack
+    }
+    s[length] = '\0'; // Null-terminate the string
     return s;
 }
-
-
 // Set Variable
 void setVar(const char* name, int processID) {
     Serial.print("Setting variable: ");
@@ -199,8 +214,6 @@ void setVar(const char* name, int processID) {
     }
 
     byte type = popByte();
-
-    // Determine the size of the variable based on its type
     int size = 0;
     switch (type) {
         case CHAR:
@@ -655,8 +668,8 @@ void loop() {
   // Serial.println(popChar());
 
     pushString("Hallo");
-    setVar('s', 2);
-    getVar('s', 2);
+    setVar('s', 3);
+    getVar('s', 3);
     popByte(); 
     Serial.println(popString());
 
