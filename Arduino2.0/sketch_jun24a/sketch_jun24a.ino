@@ -50,7 +50,7 @@ int noOfVars = 0;
 byte memory[MEMORYSIZE];
 
 byte stack[STACKSIZE];
-byte sp = 0;
+int stackPointer = 0;
 
 processType processes[MAXPROCESSES];
 int noOfProcesses = 0;
@@ -95,32 +95,64 @@ void setup() {
     Serial.println(noOfFiles);
     Serial.println("ArduinOS 1.0 ready");
     bufferIndex = 0;
+    noOfVars = 0;
     initializeFAT();
+
+
+    
 }
 
-// Stack operations
+
+// Push and Pop functions
 void pushByte(byte b) {
-    stack[sp++] = b;
+    if (stackPointer < STACKSIZE) {
+        stack[stackPointer++] = b;
+        Serial.print("Pushed byte: ");
+        Serial.println(b, HEX);
+        Serial.print("Stack pointer is now: ");
+        Serial.println(stackPointer);
+    } else {
+        Serial.println("Error: Stack overflow");
+    }
 }
 
 byte popByte() {
-    return stack[--sp];
+    if (stackPointer > 0) {
+        byte b = stack[--stackPointer];
+        Serial.print("Popped byte: ");
+        Serial.println(b, HEX);
+        Serial.print("Stack pointer is now: ");
+        Serial.println(stackPointer);
+        return b;
+    } else {
+        Serial.println("Error: Stack underflow");
+        return 0;
+    }
 }
 
-void pushInt(int val) {
-    pushByte(lowByte(val));
-    pushByte(highByte(val));
+void pushChar(char c) {
+    pushByte(c);
+    pushByte(CHAR);
+}
+
+char popChar() {
+    return popByte();
+}
+
+void pushInt(int i) {
+    pushByte(highByte(i));
+    pushByte(lowByte(i));
     pushByte(INT);
 }
 
 int popInt() {
-    byte high = popByte();
     byte low = popByte();
-    return word(low, high);
+    byte high = popByte();
+    return word(high, low);
 }
 
-void pushFloat(float val) {
-    byte *b = (byte *)&val;
+void pushFloat(float f) {
+    byte *b = (byte *)&f;
     for (int i = 3; i >= 0; i--) {
         pushByte(b[i]);
     }
@@ -132,68 +164,65 @@ float popFloat() {
     for (int i = 0; i < 4; i++) {
         b[i] = popByte();
     }
-    float *pf = (float *)b;
-    return *pf;
+    return *((float *)b);
 }
 
-void pushString(const char *str) {
-    int len = strlen(str) + 1;
-    for (int i = len - 1; i >= 0; i--) {
-        pushByte(str[i]);
+void pushString(const char *s) {
+    int length = strlen(s) + 1; // include the terminating zero
+    for (int i = length - 1; i >= 0; i--) {
+        pushByte(s[i]);
     }
-    pushByte(len);
+    pushByte(length);
     pushByte(STRING);
 }
 
-char *popString() {
-    byte type = popByte();
-    int len = popByte();
-    sp -= len; 
-    return (char *)&stack[sp];
+char* popString() {
+    int length = popByte();
+    char *s = new char[length];
+    for (int i = length - 1; i >= 0; i--) {
+        s[i] = popByte();
+    }
+    return s;
 }
 
-// Memory management
-void storeVariable(char name, int processID) {
-    if (noOfVars >= MAX_VARS) {
-        Serial.println("Error: Memory table full");
+
+// Set Variable
+void setVar(const char* name, int processID) {
+    Serial.print("Setting variable: ");
+    Serial.print(name);
+    Serial.print(", Process ID: ");
+    Serial.println(processID);
+
+    if (stackPointer < 2) {
+        Serial.println("Error: Not enough data on stack");
         return;
     }
-    
-    int idx = -1;
-    for (int i = 0; i < noOfVars; i++) {
-        if (memoryTable[i].name == name && memoryTable[i].processID == processID) {
-            idx = i;
-            break;
-        }
-    }
-    
-    if (idx != -1) { // Variable exists, remove it
-        for (int i = idx; i < noOfVars - 1; i++) {
-            memoryTable[i] = memoryTable[i + 1];
-        }
-        noOfVars--;
-    }
-    
+
     byte type = popByte();
-    int size;
+
+    // Determine the size of the variable based on its type
+    int size = 0;
     switch (type) {
         case CHAR:
-            size = 1;
+            size = sizeof(char);
             break;
         case INT:
-            size = 2;
+            size = sizeof(int);
             break;
         case FLOAT:
-            size = 4;
+            size = sizeof(float);
             break;
         case STRING:
             size = popByte();
-            sp++; // Skip the type byte
             break;
+        default:
+            Serial.println("Error: Unknown variable type");
+            return;
     }
-    
+
+    // Allocate memory for the variable
     int address = -1;
-    for (int i = 0; i < MEMORYSIZE; i++) {
+    for (int i = 0; i <= MEMORYSIZE - size; i++) {
         bool available = true;
         for (int j = 0; j < noOfVars; j++) {
             if (i >= memoryTable[j].address && i < (memoryTable[j].address + memoryTable[j].size)) {
@@ -206,29 +235,49 @@ void storeVariable(char name, int processID) {
             break;
         }
     }
-    
-    if (address == -1 || (address + size) > MEMORYSIZE) {
-        Serial.println("Error: Not enough memory");
+    if (address == -1) {
+        Serial.println("Error: No free memory");
         return;
     }
-    
-    memoryTable[noOfVars] = {name, type, address, size, processID};
+
+    // Add the variable to the memory table
+    strcpy(memoryTable[noOfVars].name, name);
+    memoryTable[noOfVars].type = type;
+    memoryTable[noOfVars].address = address;
+    memoryTable[noOfVars].size = size;
+    memoryTable[noOfVars].processID = processID;
     noOfVars++;
-    
-    for (int i = 0; i < size; i++) {
+
+    // Write the variable data from the stack to memory
+    for (int i = size - 1; i >= 0; i--) {
         memory[address + i] = popByte();
     }
+
+    Serial.print("Variable ");
+    Serial.print(name);
+    Serial.println(" set successfully.");
 }
 
-void retrieveVariable(char name, int processID) {
+// Get Variable
+void getVar(const char* name, int processID) {
+    Serial.print("Getting variable: ");
+    Serial.print(name);
+    Serial.print(", Process ID: ");
+    Serial.println(processID);
+
     for (int i = 0; i < noOfVars; i++) {
-        if (memoryTable[i].name == name && memoryTable[i].processID == processID) {
-            int address = memoryTable[i].address;
+        if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
             int size = memoryTable[i].size;
             for (int j = 0; j < size; j++) {
-                pushByte(memory[address + j]);
+                pushByte(memory[memoryTable[i].address + j]);
             }
-            pushByte(memoryTable[i].type);
+            pushByte(memoryTable[i].type); // Push the type after the data
+            Serial.print("Found variable '");
+            Serial.print(name);
+            Serial.print("' at address ");
+            Serial.print(memoryTable[i].address);
+            Serial.print(" with size ");
+            Serial.println(size);
             return;
         }
     }
@@ -242,12 +291,11 @@ void deleteVariables(int processID) {
                 memoryTable[j] = memoryTable[j + 1];
             }
             noOfVars--;
-            i--; // Check the new entry at this position
+            i--; 
         }
     }
 }
 
-// Process management
 void createProcess(const char* name) {
     if (noOfProcesses >= MAXPROCESSES) {
         Serial.println("Error: Maximum number of processes reached");
@@ -265,6 +313,7 @@ void createProcess(const char* name) {
     Serial.print("Process created: ");
     Serial.println(name);
 }
+
 
 void listProcesses() {
     Serial.println("Listing processes:");
@@ -593,8 +642,24 @@ void processCommand(char* input) {
     Serial.println("Unknown command. Type 'help' for a list of commands.");
 }
 
+// void loop() {
+//     if (readToken(inputBuffer)) {
+//         processCommand(inputBuffer);
+//     }
+// }
 void loop() {
-    if (readToken(inputBuffer)) {
-        processCommand(inputBuffer);
-    }
+  // pushChar('a');
+  // setVar('x', 0);
+  // getVar('x', 0);
+  // popByte(); 
+  // Serial.println(popChar());
+
+    pushString("Hallo");
+    setVar('s', 2);
+    getVar('s', 2);
+    popByte(); 
+    Serial.println(popString());
+
+    // Delay for a while to observe the output
+    delay(5000); // 5 seconds delay between loop iterations
 }
