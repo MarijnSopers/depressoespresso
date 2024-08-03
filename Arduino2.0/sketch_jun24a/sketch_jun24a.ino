@@ -50,7 +50,7 @@ int noOfVars = 0;
 byte memory[MEMORYSIZE];
 
 byte stack[STACKSIZE];
-int stackPointer = 1; //zet terug naar 0 
+int stackPointer = 0; //zet terug naar 0 
 
 processType processes[MAXPROCESSES];
 int noOfProcesses = 0;
@@ -99,21 +99,6 @@ void setup() {
     initializeFAT();    
 }
 
-
-// // Push and Pop functions
-// void pushByte(byte b) {
-//   //Serial.printnl("TEST1");
-//     if (stackPointer < STACKSIZE -1) {
-//       //Serial.printnl("TEST2");
-//         stack[stackPointer++] = b;
-//         //Serial.print("Pushed byte: ");
-//         //Serial.println(b, HEX);
-//         //Serial.print("Stack pointer is now: ");
-//         //Serial.println(stackPointer);
-//     } else {
-//         //Serial.println("Error: Stack overflow");
-//     }
-// }
 void pushByte(byte b) {
     if (stackPointer >= sizeof(stack)) {
         Serial.println("Error: Stack overflow");
@@ -131,10 +116,10 @@ byte popByte() {
         return 0;
     }
     byte b = stack[--stackPointer];
-    Serial.print("Popped byte: ");
-    Serial.print(b);
-    Serial.print(" / ");
-    Serial.println((char)b);
+    // Serial.print("Popped byte: ");
+    // Serial.print(b);
+    // Serial.print(" / ");
+    // Serial.println((char)b);
 
     return b;
 }
@@ -193,89 +178,39 @@ void pushString(const char *string) {
     pushByte(length + 1);          // Push length of the string including the terminating zero
     pushByte(STRING);              // Push the type identifier
 
-    Serial.print(F("String pushed: "));
-    Serial.println(string);
+    // Serial.print(F("String pushed: "));
+    // Serial.println(string);
 } 
 
-
-
-// void popString() {
-//     int length = popByte();
-//     char *s = new char[length];
-//     for (int i = length - 1; i >= 0; --i) {
-//         s[i] = popByte();
-//     }
-//     return s;
-// }
 char* popString() {
-    Serial.println("Starting popString()");
+    // Pop the length byte
+    int length = popByte();
+    if (length <= 0) {
+        return NULL; // Invalid length
+    }
+    Serial.print("Found length of: ");
+    Serial.println(length);
 
-    // Array to store lengths for debugging
-    int lengths[10];
-    
-    // Debug: Print lengths 10 times
-    for (int i = 0; i < 10; i++) {
-        if (stackPointer <= 0) {
-            Serial.println("Error: Stack underflow while getting length");
-            return NULL;
-        }
-        
-        int length = popByte(); // Assume the length was pushed earlier
-        lengths[i] = length;
-        
-        // Serial.print("Length of string ");
-        // Serial.print(i + 1);
-        // Serial.print(": ");
-        Serial.println(length);
+    char* result = (char*)malloc((length + 1) * sizeof(char));
+    if (result == NULL) {
+        return NULL;  
     }
 
-    // First, pop the length of the string from the stack for actual usage
-    int length = lengths[0]; // Using the first length for actual string retrieval
-
-    // Allocate memory for the string plus the null terminator
-    char* str = (char*)malloc(length);
-    if (str == NULL) {
-        Serial.println("Error: Memory allocation failed");
-        return NULL;
-    }
-
-    Serial.println("Memory allocated for string");
-
-    // Pop the type from the stack
-    byte type = popByte();
-    if (type != STRING) {
-        Serial.println("Error: Type mismatch");
-        free(str);
-        return NULL;
-    }
-
-    // Pop the string content into the allocated memory
     for (int i = 0; i < length; i++) {
-        if (stackPointer <= 0) {
-            Serial.println("Error: Stack underflow while popping string characters");
-            free(str);
-            return NULL;
-        }
-        byte b = popByte();
-        str[i] = b;
-        Serial.print("Popped character: ");
-        Serial.println((char)b); // Print character for debugging
+        result[i] = popByte();
     }
+    result[length] = '\0';
 
-    // Print the string content for debugging
-    Serial.print("Retrieved string: ");
-    Serial.println(str);
-
-    return str;
+    return result;
 }
 
 
 
 void setVar(const char* name, int processID) {
-    Serial.print("Setting variable: ");
-    Serial.print(name);
-    Serial.print(", Process ID: ");
-    Serial.println(processID);
+    // Serial.print("Setting variable: ");
+    // Serial.print(name);
+    // Serial.print(", Process ID: ");
+    // Serial.println(processID);
 
     if (stackPointer < 2) {
         Serial.println("Error: Not enough data on stack");
@@ -283,7 +218,7 @@ void setVar(const char* name, int processID) {
     }
 
     byte type = popByte(); // Read the type of the variable
-    Serial.print("type =");
+    Serial.print("type = ");
     Serial.println(type);
     int size = 0;
 
@@ -299,7 +234,7 @@ void setVar(const char* name, int processID) {
             break;
         case STRING:
             size = popByte(); // Read the length of the string
-            Serial.print("size =");
+            Serial.print("String length = ");
             Serial.println(size);
             break;
         default:
@@ -335,16 +270,34 @@ void setVar(const char* name, int processID) {
     noOfVars++;
 
     // Write data to memory
+    Serial.println("Writing to memory:");
     for (int i = 0; i < size; i++) {
-        memory[address + i] = popByte();
+        byte data = popByte();
+        memory[address + i] = data;
+        // Serial.print("Address ");
+        // Serial.print(address + i);
+        // Serial.print(": ");
+        // Serial.println(data);
     }
 
     // Write type and size information to memory
     if (type == STRING) {
-        memory[address + size] = STRING;
-        memory[address + size + 1] = size; // Assuming size is stored after the string
+        memory[address + size] = STRING; // Store type
+        // Serial.print("Address ");
+        // Serial.print(address + size);
+        // Serial.print(": ");
+        // Serial.println(STRING);
+        memory[address + size + 1] = size; // Store length after the string
+        // Serial.print("Address ");
+        // Serial.print(address + size + 1);
+        // Serial.print(": ");
+        // Serial.println(size);
     } else {
-        memory[address + size] = type;
+        memory[address + size] = type; // Store type for other data types
+        // Serial.print("Address ");
+        // Serial.print(address + size);
+        // Serial.print(": ");
+        // Serial.println(type);
     }
 
     Serial.print("Variable ");
@@ -374,8 +327,6 @@ void getVar(const char* name, int processID) {
     Serial.println(processID);
 
     // Find the variable in the memory table
-    Serial.print("noofvars= ");
-    Serial.println(noOfVars);
     for (int i = 0; i < noOfVars; i++) {
         if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
             int size = memoryTable[i].size;
@@ -383,12 +334,22 @@ void getVar(const char* name, int processID) {
             byte type = memoryTable[i].type;
 
             // Push the variable data onto the stack
+            Serial.print("type = ");
+            Serial.println(type);
+
             for (int j = 0; j < size; j++) {
-                Serial.println("doing shit");
                 pushByte(memory[address + j]);
             }
+                if (type == STRING) {
+                Serial.print("Pushing length: ");
+                pushByte(memory[address + size + 1]); // Push the length of the string
+                Serial.println(memory[address + size + 1]);
+            }
+
             pushByte(type); // Push the type after the data
-            
+
+
+
             Serial.print("Found variable '"); 
             Serial.print(name);
             Serial.print("' at address ");
@@ -400,6 +361,8 @@ void getVar(const char* name, int processID) {
     }
     Serial.println("Error: Variable not found");
 }
+
+
 
 void deleteVariables(int processID) {
     for (int i = 0; i < noOfVars; i++) {
@@ -766,19 +729,38 @@ void processCommand(char* input) {
 // }
 void loop() {
   delay(5000);
-  // pushChar('a');
-  // setVar('x', 0);
-  // getVar('x', 0);
-  // popByte(); 
-  // Serial.println(popChar());
+  Serial.println("char");
+  pushChar('a');
+  setVar('x', 0);
+  getVar('x', 0);
+  popByte(); // gets type
+  Serial.println(popChar());
 
-    pushString("Hallo");
-    setVar('s', 3);
-    getVar('s', 3);
-    popByte(); 
-    Serial.println(popString());
-    Serial.println("cheese");
+  delay(5000);
+  Serial.println("int");
+  pushInt(12);
+  setVar('y', 1);
+  getVar('y', 1);
+  popByte(); // gets type
+  Serial.println(popInt());
+
+  delay(5000);
+  Serial.println("float");
+  pushFloat(1.234);
+  setVar('z', 1);
+  getVar('z', 1);
+  popByte(); // gets type
+  Serial.println(popFloat());
+
+  delay(5000);
+  Serial.println("string");
+  pushString("Hallo");
+  setVar('s', 2);
+  getVar('s', 2);
+  popByte(); // gets type
+  Serial.println(popString());
+
 
     // Delay for a while to observe the output
-    delay(5000000); // 5 seconds delay between loop iterations
+  delay(5000000); // 5 seconds delay between loop iterations
 }
