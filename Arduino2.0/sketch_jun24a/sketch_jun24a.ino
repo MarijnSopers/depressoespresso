@@ -116,10 +116,10 @@ byte popByte() {
         return 0;
     }
     byte b = stack[--stackPointer];
-    // Serial.print("Popped byte: ");
-    // Serial.print(b);
-    // Serial.print(" / ");
-    // Serial.println((char)b);
+    Serial.print("Popped byte: ");
+    Serial.print(b);
+    Serial.print(" / ");
+    Serial.println((char)b);
 
     return b;
 }
@@ -140,25 +140,41 @@ void pushInt(int i) {
 }
 
 int popInt() {
-    byte low = popByte();
-    byte high = popByte();
-    return word(high, low);
+    if (stackPointer < 2) {
+        Serial.println("Error: Not enough data on stack");
+        return 0; // Handle the error appropriately
+    }
+    byte lowByte = popByte();   
+    byte highByte = popByte();   
+    int value = word(lowByte, highByte);  
+
+    return value;
 }
 
 void pushFloat(float f) {
     byte *b = (byte *)&f;
-    for (int i = 3; i >= 0; i--) {
+    Serial.println("Pushing float bytes: ");
+    Serial.print("sizeof the value: ");
+    Serial.println(sizeof(float));
+    for (int i = sizeof(float) - 1; i >= 0; i--) {
         pushByte(b[i]);
+        Serial.print(b[i], HEX);
+        Serial.print(" ");
     }
-    pushByte(FLOAT);
+    Serial.println();  // Newline for clarity
+    pushByte(FLOAT);  // Push the type identifier last
 }
 
+
 float popFloat() {
-    byte b[4];
-    for (int i = 0; i < 4; i++) {
+    byte b[sizeof(float)];
+    for (int i = sizeof(float) - 1; i >= 0; i--) {
         b[i] = popByte();
+        Serial.print("Popped byte: ");
+        Serial.println(b[i], HEX);
     }
-    return *((float *)b);
+    float *f = (float *)b;
+    return *f;
 }
 
 
@@ -749,8 +765,11 @@ void loop() {
   pushFloat(1.234);
   setVar('z', 1);
   getVar('z', 1);
+  for (int i = 0; i<= 5; i++) {
+    Serial.println("hi");
+  }
   popByte(); // gets type
-  Serial.println(popFloat());
+  Serial.println(popFloat(),6);
 
   delay(5000);
   Serial.println("string");
@@ -759,6 +778,24 @@ void loop() {
   getVar('s', 2);
   popByte(); // gets type
   Serial.println(popString());
+
+  delay(5000);
+  Serial.println("string");
+  pushString("Hallobamipangpang");
+  setVar('u', 2);
+  getVar('u', 2);
+  popByte(); // gets type
+  Serial.println(popString());
+
+  delay(5000);
+  Serial.println("string");
+  pushString("Hallobamipangpang");
+  setVar('u', 2);
+  getVar('u', 2);
+  popByte(); // gets type
+  Serial.println(popString());
+
+  
 
 
     // Delay for a while to observe the output
