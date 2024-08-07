@@ -35,12 +35,14 @@ typedef struct {
 
 typedef struct {
     char name[FILENAMESIZE];
-    int processId;
-    byte state;
-    int pc;
-    int sp;
-    byte stack[STACKSIZE];
-} processType;
+    int process_id;
+    char state; // 'r' for RUNNING, 'p' for PAUSED, '0' for TERMINATED
+    int PC; // Program Counter
+    int FP; // File Pointer
+    int SP; // Stack Pointer
+    int loop_start; // Address of the start of the loop
+    int stack[STACKSIZE]; // Separate stack for each process
+} Process;
 
 fileType FAT[MAX_FILES];
 EERef noOfFiles = EEPROM[160];
@@ -794,8 +796,6 @@ void loop() {
   getVar('u', 2);
   popByte(); // gets type
   Serial.println(popString());
-
-  
 
 
     // Delay for a while to observe the output
