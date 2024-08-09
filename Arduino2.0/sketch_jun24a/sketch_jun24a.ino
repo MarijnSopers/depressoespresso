@@ -98,7 +98,7 @@ int bufferIndex = 0;
 void setup() {
     Serial.begin(9600); 
     ////Serial.println((noOfFiles);
-    Serial.println("ArduinOS 1.0 ready");
+    Serial.println(F("ArduinOS 1.0 ready"));
     bufferIndex = 0;
     noOfVars = 0;
     initProcessTable();
@@ -113,7 +113,7 @@ void initProcessTable() {
 
 void pushByte(byte b) {
     if (stackPointer >= sizeof(stack)) {
-        Serial.println("Error: Stack overflow");
+        Serial.println(F("Error: Stack overflow"));
         return;
     }
     stack[stackPointer++] = b;
@@ -183,7 +183,7 @@ float popFloat() {
     for (int i = sizeof(float) - 1; i >= 0; i--) {
         b[i] = popByte();
         Serial.print("Popped byte: ");
-        //Serial.println((b[i], HEX);
+        Serial.println(b[i], HEX);
     }
     float *f = (float *)b;
     return *f;
@@ -209,7 +209,7 @@ char* popString() {
     if (length <= 0) {
         return NULL; // Invalid length
     }
-    Serial.print("Found length of: ");
+    Serial.print(F("Found length of: "));
     Serial.println(length);
 
     char* result = (char*)malloc((length + 1) * sizeof(char));
@@ -228,7 +228,7 @@ char* popString() {
 void setVar(const char* name, int processID) {
     // Check for space in the memory table
     if (noOfVars >= MAX_VARS) {
-        Serial.println("Error: No space in memory table");
+        Serial.println(F("Error: No space in memory table"));
         return;
     }
 
@@ -245,7 +245,7 @@ void setVar(const char* name, int processID) {
     }
 
     if (stackPointer < 1) {
-        Serial.println("Error: Not enough data on stack");
+        Serial.println(F("Error: Not enough data on stack"));
         return;
     }
 
@@ -265,22 +265,22 @@ void setVar(const char* name, int processID) {
             break;
         case STRING:
             if (stackPointer < 1) {
-                Serial.println("Error: Not enough data on stack for string length");
+                Serial.println(F("Error: Not enough data on stack for string length"));
                 return;
             }
             size = popByte();
             break;
         default:
-            Serial.println("Error: Unknown variable type");
+            Serial.println(F("Error: Unknown variable type"));
             return;
     }
 
     // Find free memory space
     int address = findFreeSpaceInMemoryTable(size);
-    Serial.print("avalible space = ");
+    Serial.print(F("avalible space = "));
     Serial.println(address);
     if (address == -1) {
-        Serial.println("Error: No free memory");
+        Serial.println(F("Error: No free memory"));
         return;
     }
 
@@ -293,17 +293,17 @@ void setVar(const char* name, int processID) {
     noOfVars++;
 
     // Write data to memory
-    Serial.println("Writing to memory:");
+    Serial.println(F("Writing to memory:"));
     for (int i = 0; i < size; i++) {
         if (stackPointer < 1) {
-            Serial.println("Error: Not enough data on stack to write to memory");
+            Serial.println(F("Error: Not enough data on stack to write to memory"));
             return;
         }
         byte data = popByte();
         memory[address + i] = data;
-        Serial.print("Address ");
+        Serial.print(F("Address "));
         Serial.print(address + i);
-        Serial.print(": ");
+        Serial.print(F(": "));
         Serial.println(data);
     }
 
@@ -315,17 +315,17 @@ void setVar(const char* name, int processID) {
         memory[address + size] = type; // Store type for other data types
     }
 
-    Serial.print("Variable ");
+    Serial.print(F("Variable "));
     Serial.print(name);
-    Serial.println(" set successfully.");
+    Serial.println(F(" set successfully."));
 }
 
 void getVar(const char* name, int processID) {
-    Serial.print("Getting variable: ");
+    Serial.print(F("Getting variable: "));
     Serial.print(name);
-    Serial.print(", Process ID: ");
+    Serial.print(F(", Process ID: "));
     Serial.println(processID);
-    Serial.println("Number of variables: ");
+    Serial.println(F("Number of variables: "));
     Serial.println(noOfVars);
 
     // Search for the variable in the memoryTable
@@ -335,38 +335,32 @@ void getVar(const char* name, int processID) {
             int address = memoryTable[i].address;
             byte type = memoryTable[i].type;
 
-            // Print the type of the variable
-            Serial.print("type = ");
-            Serial.println(type);
-
-            // Push variable data onto the stack
             for (int j = 0; j < size; j++) {
                 pushByte(memory[address + j]);
             }
 
             if (type == STRING) {
                 // Push the length of the string (stored after the data in memory)
-                Serial.print("Pushing length: ");
+                Serial.print(F("Pushing length: "));
                 pushByte(memory[address + size + 1]);
             }
 
             // Push the type of the variable after the data
             pushByte(type);
 
-            Serial.print("Found variable '");
+            Serial.print(F("Found variable '"));
             Serial.print(name);
-            Serial.print("' at address ");
+            Serial.print(F("' at address "));
             Serial.print(address);
-            Serial.print(" with size ");
+            Serial.print(F(" with size "));
             Serial.println(size);
             return;
         }
     }
 
     // Error if variable not found
-    Serial.println("Error: Variable not found");
+    Serial.println(F("Error: Variable not found"));
 }
-
 
 int findFreeSpaceInMemoryTable(int size) {
     for (int i = 0; i <= MEMORYSIZE - size; i++) {
@@ -397,54 +391,54 @@ void deleteVariables(int processID) {
 }
 
 void help() {
-    //Serial.println(("Available commands:");
+    Serial.println("Available commands:");
     for (int i = 0; i < nCommands; i++) {
-        //Serial.println((command[i].name);
+        Serial.println(command[i].name);
     }
 }
 
 void store() {
-    //Serial.println(("Executing store command");
+    Serial.println(F("Executing store command"));
 
     char filename[FILENAMESIZE] = "";
     if (!readToken(filename)) { 
-        //Serial.println(("Error: Unknown filename");
+        Serial.println(F("Error: Unknown filename"));
         return;
     }
 
-    Serial.print("Filename: ");
-    //Serial.println((filename);
+    Serial.print(F("Filename: "));
+    Serial.println((filename));
 
     char sizeBuffer[BUFSIZE] = "";
     if (!readToken(sizeBuffer)) { 
-        //Serial.println(("Error: Unknown size");
+        Serial.println("Error: Unknown size");
         return;
     }
 
-    Serial.print("Size: ");
-    //Serial.println((sizeBuffer);
+    Serial.print(F("Size: "));
+    Serial.println(sizeBuffer);
 
     int fileSize = atoi(sizeBuffer);
 
     if (fileSize <= 0) {
-        //Serial.println(("Error: Invalid file size");
+        Serial.println(F("Error: Invalid file size"));
         return;
     }
 
     if (findFile(filename) != -1) {
-        //Serial.println(("Error: File already exists");
+        Serial.println(F("Error: File already exists"));
         return;
     }
 
     int freeSpace = findFreeSpace(fileSize);
     if (freeSpace == -1) {
-        //Serial.println(("Error: Not enough space to store the file");
+        Serial.println(F("Error: Not enough space to store the file"));
         return;
     }
 
     int index = findEmptyFATEntry();
     if (index == -1) {
-        //Serial.println(("Error: No empty FAT entry");
+        Serial.println(F("Error: No empty FAT entry"));
         return;
     }
 
@@ -452,8 +446,8 @@ void store() {
     FAT[index].size = fileSize;
     strncpy(FAT[index].name, filename, FILENAMESIZE);
 
-    Serial.print("File content will be stored starting at EEPROM address: ");
-    //Serial.println((freeSpace);
+    // Serial.print(F("File content will be stored starting at EEPROM address: "));
+    // //Serial.println((freeSpace);
 
     writeFATEntry(index);
 
@@ -470,7 +464,7 @@ void store() {
     noOfFiles++;
     EEPROM.write(160, noOfFiles);
     //Serial.println(("");
-    //Serial.println(("File stored successfully");
+    Serial.println("File stored successfully");
 }
 
 
@@ -504,9 +498,9 @@ int findFreeSpace(int fileSize) {
 void writeFATEntry(int index) {
     EEPROM.put(index * sizeof(fileType), FAT[index]);
 
-    Serial.print("FAT entry ");
-    Serial.print(index);
-    Serial.print(" written at EEPROM address: ");
+    // Serial.print("FAT entry ");
+    // Serial.print(index);
+    // Serial.print(" written at EEPROM address: ");
     //Serial.println((index * sizeof(fileType));
 }
 
@@ -519,17 +513,17 @@ void initializeFAT() {
 }
 
 void retrieve() {
-    //Serial.println(("Executing retrieve command");
+    Serial.println("Executing retrieve command");
 
     char filename[FILENAMESIZE] = "";
     if (!readToken(filename)) {
-        //Serial.println(("Error: Unknown filename");
+        Serial.println("Error: Unknown filename");
         return;
     }
 
     int index = findFileInFAT(filename);
     if (index == -1) {
-        //Serial.println(("Error: File not found");
+        Serial.println("Error: File not found");
         return;
     }
 
@@ -538,11 +532,11 @@ void retrieve() {
         data[i] = EEPROM.read(FAT[index].start + i);
     }
 
-    //Serial.println(("File content:");
+    Serial.println("File content:");
     for (int i = 0; i < FAT[index].size; i++) {
         Serial.print(data[i]);
     }
-    //Serial.println(();
+    Serial.println();
 }
 
 int findFileInFAT(char* filename) {
@@ -555,17 +549,17 @@ int findFileInFAT(char* filename) {
 }
 
 void erase() {
-    //Serial.println(("Executing erase command");
+    Serial.println("Executing erase command");
 
     char filename[FILENAMESIZE] = "";
     if (!readToken(filename)) {
-        //Serial.println(("Error: Unknown filename");
+        Serial.println("Error: Unknown filename");
         return;
     }
 
     int index = findFileInFAT(filename);
     if (index == -1) {
-        //Serial.println(("Error: File not found");
+        Serial.println("Error: File not found");
         return;
     }
 
@@ -574,17 +568,17 @@ void erase() {
 
     noOfFiles--;
     EEPROM.write(160, noOfFiles);
-    //Serial.println(("File erased successfully");
+    Serial.println("File erased successfully");
 }
 
 void files() {
-    //Serial.println(("Listing files:");
+    Serial.println("Listing files:");
     for (int i = 0; i < noOfFiles; i++) {
         Serial.print(FAT[i].name);
         Serial.print(" - ");
         Serial.print(FAT[i].size);
         Serial.print(" bytes at address ");
-        //Serial.println((FAT[i].start);
+        Serial.println(FAT[i].start);
     }
 }
 
@@ -597,8 +591,8 @@ void freespace() {
         }
     }
 
-    Serial.print("Max available space: ");
-    //Serial.println((maxFreeSpace);
+    // Serial.print("Max available space: ");
+    // Serial.println(maxFreeSpace);
 }
 
 void run() {
@@ -606,20 +600,20 @@ void run() {
 
     char filename[FILENAMESIZE] = "";
     if (!readToken(filename)) {
-        Serial.println("Error: Unknown filename");
+        Serial.println(F("Error: Unknown filename"));
         return;
     }
 
     // Check if file exists in the FAT
     int index = findFileInFAT(filename);
     if (index == -1) {
-        Serial.println("Error: File not found");
+        Serial.println(F("Error: File not found"));
         return;
     }
 
     // Check if there is space in the process table
     if (noOfProcesses >= MAXPROCESSES) {
-        Serial.println("Error: Process table is full.");
+        Serial.println(F("Error: Process table is full."));
         return;
     }
 
@@ -643,11 +637,11 @@ void run() {
     noOfProcesses++; // Increment process count
 
     // Print the success message
-    Serial.print("Process ");
+    Serial.print(F("Process "));
     Serial.print(filename);
-    Serial.print(" with ID ");
+    Serial.print(F(" with ID "));
     Serial.print(processId);
-    //Serial.println((" started successfully.");
+    Serial.println(F(" started successfully.")); // Corrected the print statement here
 }
 
 void list() {
@@ -672,25 +666,24 @@ void list() {
             Serial.print("UNKNOWN STATE");
         }
 
-        Serial.print(" PC: ");
+        Serial.print(F(" PC: "));
         Serial.print(processes[i].pc);
-        Serial.print(" FP: ");
+        Serial.print(F(" FP: "));
         Serial.print(processes[i].fp);
-        Serial.print(" SP: ");
+        Serial.print(F(" SP: "));
         //Serial.println((processes[i].sp);
     }
 }
 
 
 void suspend() {
-    Serial.println("Suspend command not implemented yet");
     char prosesid[BUFSIZE] = "";
     if (!readToken(prosesid)) { 
-        Serial.println("Error: Unknown size");
+        Serial.println(F("Error: Unknown size"));
         return;
     }
 
-    Serial.print("id: ");
+    Serial.print(F("id: "));
     Serial.println(prosesid);
 
     int fileSize = atoi(prosesid);
@@ -698,20 +691,32 @@ void suspend() {
 }
 
 void suspendProcess(int processID) {
-    if (processID < 0 || processID >= noOfProcesses) {
-        Serial.println("Error: Invalid process ID");
+    int processIndex = -1;
+    for (int i = 0; i < noOfProcesses; i++) {
+        if (processes[i].processId == processID) {
+            processIndex = i;
+            break;
+        }
+    }
+
+    // Check if the process ID was found
+    if (processIndex == -1) {
+        Serial.println(F("Error: Invalid process ID"));
         return;
     }
 
-    if (processes[processID].state == SUSPENDED) {
-        Serial.println("Error: Process is already suspended");
+    // Check if the process is already suspended
+    if (processes[processIndex].state == SUSPENDED) {
+        Serial.println(F("Error: Process is already suspended"));
         return;
     }
 
-    processes[processID].state = SUSPENDED;
-    Serial.print("Process suspended: ");
-    Serial.println(processes[processID].name);
+    // Suspend the process
+    processes[processIndex].state = SUSPENDED;
+    Serial.print(F("Process suspended: "));
+    Serial.println(processes[processIndex].name);
 }
+
 
 
 void resume() {
@@ -811,50 +816,13 @@ void processCommand(char* input) {
             command[i].func();
             return;
         }
-    }
+    } 
     //Serial.println(("Unknown command. Type 'help' for a list of commands.");
 }
 
 void loop() {
-    // if (readToken(inputBuffer)) {
-    //     processCommand(inputBuffer);
-    // }
-    delay(5000);
-    pushString("Hallo");
-    setVar("s", 2); // Use double quotes for string literals
-    //getVar("s", 2); // Use double quotes for string literals
-    // Serial.println(popByte()); // Get type
-    // Serial.println(popString()); // Print string
-
-
-
-    delay(5000);
-    pushString("hola");
-    setVar("g", 2); // Use double quotes for string literals
-    getVar("g", 2); // Use double quotes for string literals
-    Serial.println(popByte()); // Get type
-    Serial.println(popString()); // Print string
-
-    delay(5000);
-    getVar("s", 2); // Use double quotes for string literals
-    Serial.println(popByte()); // Get type
-    Serial.println(popString()); // Print string
-
-
-    delay(5000);
-    getVar("g", 2); // Use double quotes for string literals
-    Serial.println(popByte()); // Get type
-    Serial.println(popString()); // Print string
-
-
-
-    delay(5000);
-    getVar("s", 2); // Use double quotes for string literals
-    Serial.println(popByte()); // Get type
-    Serial.println(popString()); // Print string
-
-
-
-    delay(500000);
+    if (readToken(inputBuffer)) {
+        processCommand(inputBuffer);
+    }
 }
 
