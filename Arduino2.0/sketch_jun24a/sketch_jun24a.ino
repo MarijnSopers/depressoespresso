@@ -13,10 +13,6 @@
 
 #define MAX_VARS 25
 
-// #define RUNNING 'r'
-// #define SUSPENDED 'p'
-// #define TERMINATED '0'
-
 typedef struct {
     char name[FILENAMESIZE];
     int start;
@@ -113,7 +109,7 @@ void initProcessTable() {
 
 void pushByte(byte b) {
     if (stackPointer >= sizeof(stack)) {
-        //Serial.println(F("Error: Stack overflow"));
+        Serial.println(F("Error: Stack overflow"));
         return;
     }
     stack[stackPointer++] = b;
@@ -124,7 +120,7 @@ void pushByte(byte b) {
 
 byte popByte() {
     if (stackPointer <= 0) {
-        //Serial.println(("Error: Stack underflow");
+        Serial.println(F("Error: Stack underflow"));
         return 0;
     }
     byte b = stack[--stackPointer];
@@ -132,7 +128,6 @@ byte popByte() {
     // Serial.print(b);
     // Serial.print(" / ");
     //Serial.println(((char)b);
-
     return b;
 }
 
@@ -176,7 +171,6 @@ void pushFloat(float f) {
     //Serial.println(();  // Newline for clarity
     pushByte(FLOAT);  // Push the type identifier last
 }
-
 
 float popFloat() {
     byte b[sizeof(float)];
@@ -445,8 +439,8 @@ void store() {
     FAT[index].size = fileSize;
     strncpy(FAT[index].name, filename, FILENAMESIZE);
 
-    // Serial.print(F("File content will be stored starting at EEPROM address: "));
-    // //Serial.println((freeSpace);
+    Serial.print(F("File content will be stored starting at EEPROM address: "));
+    Serial.println(freeSpace);
 
     writeFATEntry(index);
 
@@ -850,9 +844,79 @@ void processCommand(char* input) {
     Serial.println(F("Unknown command. Type 'help' for a list of commands."));
 }
 
+void runProcesses() {
+    for (int i = 0; i < noOfProcesses; i++) {
+        if (processes[i].state == 'r') { // Check if the process is RUNNING
+            execute(i); // Execute the next instruction for this process
+            delay(200); // Delay to allow other operations and avoid overwhelming the CPU
+        }
+    }
+}
+
+void execute(int processIndex) {
+    int address = processes[processIndex].fp; // Frame Pointer
+    int pc = processes[processIndex].pc; // Program Counter
+
+    byte instruction = EEPROM.read(address + pc);
+    processes[processIndex].pc += 1; // Move PC to the next instruction
+
+    switch (instruction) {
+        case CHAR: {
+            char charValue = EEPROM.read(address + processes[processIndex].pc);
+            processes[processIndex].pc += 1; // Move PC to the next instruction
+            pushChar(charValue);
+            break;
+        }
+        case INT: {
+            int intValue = EEPROM.read(address + processes[processIndex].pc);
+            processes[processIndex].pc += 1; // Move PC to the next instruction
+            pushInt(intValue);
+            break;
+        }
+        case STRING: {
+            String strValue;
+            byte charValue;
+            while ((charValue = EEPROM.read(address + processes[processIndex].pc)) != '\0') {
+                strValue += (char)charValue;
+                processes[processIndex].pc += 1; // Move PC to the next character
+            }
+            processes[processIndex].pc += 1; // Move PC past the null-terminator
+            pushString(strValue.c_str()); // Convert String to const char* and push
+            break;
+        }
+        case FLOAT: {
+            byte b[4];
+            for (int i = 0; i < 4; i++) {
+                b[i] = EEPROM.read(address + processes[processIndex].pc);
+                processes[processIndex].pc += 1; // Move PC to the next byte
+            }
+            float *pf = (float *)b;
+            pushFloat(*pf);
+            break;
+        }
+        // case PRINT: {
+        //     Serial.print(F("PRINT: "));
+        //     printVar(processes[processIndex].processId);
+        //     break;
+        // }
+        // case PRINTLN: {
+        //     Serial.print(F("PRINTLN: "));
+        //     printVar(processes[processIndex].processId);
+        //     Serial.println();
+        //     break;
+        // }
+        default: {
+            Serial.print(F("Error: Unknown instruction "));
+            Serial.println(instruction);
+            break;
+        }
+    }
+}
+
 void loop() {
     if (readToken(inputBuffer)) {
         processCommand(inputBuffer);
     }
+    runProcesses();
 }
 
