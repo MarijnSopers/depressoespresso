@@ -294,10 +294,10 @@ void setVar(const char* name, int processID) {
         }
         byte data = popByte();
         memory[address + i] = data;
-        Serial.print(F("Address "));
-        Serial.print(address + i);
-        Serial.print(F(": "));
-        Serial.println(data);
+        // Serial.print(F("Address "));
+        // Serial.print(address + i);
+        // Serial.print(F(": "));
+        // Serial.println(data);
     }
 
     // Write type and size information to memory
@@ -418,7 +418,7 @@ void store() {
         return;
     }
 
-    if (findFile(filename) != -1) {
+    if (findFileInFAT(filename) != -1) {
         Serial.println(F("Error: File already exists"));
         return;
     }
@@ -439,8 +439,8 @@ void store() {
     FAT[index].size = fileSize;
     strncpy(FAT[index].name, filename, FILENAMESIZE);
 
-    Serial.print(F("File content will be stored starting at EEPROM address: "));
-    Serial.println(freeSpace);
+    // Serial.print(F("File content will be stored starting at EEPROM address: "));
+    // Serial.println(freeSpace);
 
     writeFATEntry(index);
 
@@ -449,7 +449,7 @@ void store() {
     for (int i = 0; i < fileSize; i++) {
         while (!Serial.available());
         content[i] = Serial.read();
-        Serial.print(content[i]);
+        //retrieve kaaSerial.print(content[i]);
         delay(1);
         EEPROM.write(freeSpace + i, content[i]);
     }
@@ -556,15 +556,42 @@ void erase() {
         return;
     }
 
-    FAT[index].size = 0;
-    writeFATEntry(index);
+    int fileSize = FAT[index].size;
+    int startAddress = FAT[index].start;
+
+    // Shift all files that come after the erased file
+    for (int i = index + 1; i < MAX_FILES; i++) {
+        if (FAT[i].size > 0) {
+            // Calculate the new start address
+            int newStartAddress = FAT[i].start - fileSize;
+
+            // Move the file content in EEPROM
+            for (int j = 0; j < FAT[i].size; j++) {
+                EEPROM.write(newStartAddress + j, EEPROM.read(FAT[i].start + j));
+            }
+
+            // Update the FAT entry
+            FAT[i - 1] = FAT[i];  // Shift FAT entry up
+            FAT[i - 1].start = newStartAddress;
+            writeFATEntry(i - 1);
+        }
+    }
+
+    // Clear the last FAT entry (now duplicated after shifting)
+    FAT[noOfFiles - 1].size = 0;
+    FAT[noOfFiles - 1].start = 0;
+    memset(FAT[noOfFiles - 1].name, 0, FILENAMESIZE);
+    writeFATEntry(noOfFiles - 1);
 
     noOfFiles--;
     EEPROM.write(160, noOfFiles);
-    Serial.println(F("File erased successfully"));
+
+    Serial.println(F("File erased and subsequent files shifted successfully"));
 }
 
+
 void files() {
+
     Serial.println("Listing files:");
     for (int i = 0; i < noOfFiles; i++) {
         Serial.print(FAT[i].name);
@@ -655,12 +682,12 @@ void list() {
             Serial.print(F("UNKNOWN STATE"));
         }
 
-        Serial.print(F(" PC: "));
-        Serial.print(processes[i].pc);
-        Serial.print(F(" FP: "));
-        Serial.print(processes[i].fp);
-        Serial.print(F(" SP: "));
-        //Serial.println((processes[i].sp);
+        // Serial.print(F(" PC: "));
+        // Serial.print(processes[i].pc);
+        // Serial.print(F(" FP: "));
+        // Serial.print(processes[i].fp);
+        // Serial.print(F(" SP: "));
+        // Serial.println(processes[i].sp);
     }
 }
 
@@ -716,7 +743,6 @@ void resume() {
     int processID = atoi(processid);
     resumeProcess(processID);
 }
-
 
 void resumeProcess(int processID) {
     int processIndex = -1;
@@ -792,8 +818,8 @@ void killProcess(int processID) {
 
 
 void show() {
-    //Serial.println(("Show command");
-    //Serial.println((noOfFiles);
+    // Serial.println(F("Show command");
+    // Serial.println((noOfFiles);
 }
 
 void deleteAllFiles() {
@@ -806,7 +832,7 @@ void deleteAllFiles() {
     }
     noOfFiles = 0;
     EEPROM.write(160, noOfFiles);
-    //Serial.println(("All files deleted successfully.");
+    Serial.println(F("All files deleted successfully."));
 }
 
 bool readToken(char* buffer) {
@@ -825,14 +851,7 @@ bool readToken(char* buffer) {
     return false;
 }
 
-int findFile(char* filename) {
-    for (int i = 0; i < MAX_FILES; i++) {
-        if (strcmp(FAT[i].name, filename) == 0) {
-            return i;
-        }
-    }
-    return -1;
-}
+
 
 void processCommand(char* input) {
     for (int i = 0; i < nCommands; i++) {
@@ -917,6 +936,6 @@ void loop() {
     if (readToken(inputBuffer)) {
         processCommand(inputBuffer);
     }
-    runProcesses();
+    //runProcesses();
 }
 
