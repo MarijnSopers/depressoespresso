@@ -109,10 +109,10 @@ void store() {
     Serial.println(content);
 
     // Check if the content length is greater than the specified size
-    if (strlen(content) != fileSize) {
-        Serial.println("Error: Content size does not match specified file size");
-        return;
-    }
+    // if (strlen(content) != fileSize) {
+    //     Serial.println("Error: Content size does not match specified file size");
+    //     return;
+    // }
     
     // Check if there is enough space in the FAT
     if (noOfFiles >= MAX_FILES) {
