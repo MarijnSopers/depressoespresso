@@ -436,10 +436,6 @@ void store() {
     Serial.println(F(" has been stored successfully."));
 }
 
-
-
-
-
 int findEmptyFATEntry() {
   for (int i = 0; i < MAX_FILES; i++) {
     if (FAT[i].size == 0) {
@@ -524,21 +520,17 @@ void erase() {
     // return;
     filename = inputBuffer;
   }
-
-  int index = findFileInFAT(filename);
+    int index = findFileInFAT(filename);
   if (index == -1) {
     Serial.println(F("Error: File not found"));
     return;
   }
 
-  Serial.print(F("Erasing file at index: "));
-  Serial.println(index);
-
   int fileSize = FAT[index].size;
   int startAddress = FAT[index].start;
 
   // Shift all files that come after the erased file
-  for (int i = index + 1; i < noOfFiles; i++) {
+  for (int i = index + 1; i < MAX_FILES; i++) {
     if (FAT[i].size > 0) {
       // Calculate the new start address
       int newStartAddress = FAT[i].start - fileSize;
@@ -556,14 +548,12 @@ void erase() {
   }
 
   // Clear the last FAT entry (now duplicated after shifting)
-  noOfFiles--;
-  if (noOfFiles > 0) {
-    FAT[noOfFiles].size = 0;
-    FAT[noOfFiles].start = 0;
-    memset(FAT[noOfFiles].name, 0, FILENAMESIZE);
-    writeFATEntry(noOfFiles);
-  }
+  FAT[noOfFiles - 1].size = 0;
+  FAT[noOfFiles - 1].start = 0;
+  memset(FAT[noOfFiles - 1].name, 0, FILENAMESIZE);
+  writeFATEntry(noOfFiles - 1);
 
+  noOfFiles--;
   EEPROM.write(160, noOfFiles);
 
   Serial.println(F("File erased and subsequent files shifted successfully"));
@@ -580,7 +570,10 @@ void files() {
     Serial.print(FAT[i].size);
     Serial.print(F(" bytes at address "));
     Serial.println(FAT[i].start);
+
   }
+  Serial.print(F("current spaces in use: "));
+  Serial.println(noOfFiles);
 }
 
 void freespace() {
@@ -598,11 +591,12 @@ void freespace() {
 
 void run() {
   Serial.println(F("Executing run command"));
-
-  char filename[FILENAMESIZE] = "";
-  if (!readToken(filename)) {
-    Serial.println(F("Error: Unknown filename"));
-    return;
+  inputBuffer[0] = 0;    
+  char* filename;
+  while (!readToken(inputBuffer)) {
+    // Serial.println(F("Error: Unknown filename"));
+    // return;
+    filename = inputBuffer;
   }
 
   int index = findFileInFAT(filename);
@@ -687,16 +681,17 @@ void list() {
 
 
 void suspend() {
-  char processid[BUFSIZE] = "";
-  if (!readToken(processid)) {
-    Serial.println(F("Error: Unknown size"));
-    return;
+  inputBuffer[0] = 0;    
+  char* processid;
+  while (!readToken(inputBuffer)) {
+    // Serial.println(F("Error: Unknown filename"));
+    // return;
+    processid = inputBuffer;
   }
 
-  // Serial.print(F("id: "));
-  // Serial.println(processid);
-
   int processID = atoi(processid);
+  Serial.print(F("process id:"));
+  Serial.println(processID);
   suspendProcess(processID);
 }
 
@@ -728,10 +723,12 @@ void suspendProcess(int processID) {
 }
 
 void resume() {
-  char processid[BUFSIZE] = "";
-  if (!readToken(processid)) {
-    Serial.println(F("Error: Unknown size"));
-    return;
+  inputBuffer[0] = 0;    
+  char* processid;
+  while (!readToken(inputBuffer)) {
+    // Serial.println(F("Error: Unknown filename"));
+    // return;
+    processid = inputBuffer;
   }
 
   int processID = atoi(processid);
@@ -765,10 +762,12 @@ void resumeProcess(int processID) {
 
 
 void kill() {
-  char processid[BUFSIZE] = "";
-  if (!readToken(processid)) {
-    Serial.println(F("Error: Unknown size"));
-    return;
+  inputBuffer[0] = 0;    
+  char* processid;
+  while (!readToken(inputBuffer)) {
+    // Serial.println(F("Error: Unknown filename"));
+    // return;
+    processid = inputBuffer;
   }
 
   int processID = atoi(processid);
@@ -829,17 +828,17 @@ void deleteAllFiles() {
 
 
 static commandType command[] = {
-  { "help", &help },
-  { "store", &store },
-  { "retrieve", &retrieve },
-  { "erase", &erase },
-  { "files", &files },
-  { "freespace", &freespace },
-  { "run", &run },
-  { "list", &list },
-  { "suspend", &suspend },
-  { "resume", &resume },
-  { "kill", &kill },
+   { "help", &help },
+   { "store", &store },
+   { "retrieve", &retrieve },
+   { "erase", &erase },
+   { "files", &files },
+   { "freespace", &freespace },
+   { "run", &run },
+   { "list", &list },
+   { "suspend", &suspend },
+   { "resume", &resume },
+   //{ "kill", &kill },
   { "deleteall", &deleteAllFiles },
   //{ "show", &show },
 };
