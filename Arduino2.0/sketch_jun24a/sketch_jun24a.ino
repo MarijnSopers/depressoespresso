@@ -65,7 +65,7 @@ void setup() {
   Serial.begin(9600);
   ////Serial.println((noOfFiles);
   Serial.println(F("ArduinOS 1.0 ready"));
-  initProcessTable();
+  // initProcessTable();
   initializeFAT();
 }
 
@@ -81,230 +81,6 @@ void initProcessTable() {
     processes[i].state = '0';
   }
 }
-
-
-void pushByte(Process &p, byte b) {
-    if (p.sp >= STACKSIZE) {
-        Serial.println(F("Error: Stack overflow"));
-        return;
-    }
-    p.stack[p.sp++] = b;
-}
-
-byte popByte(Process &p) {
-    if (p.sp <= 0) {
-        Serial.println(F("Error: Stack underflow"));
-        return 0;
-    }
-    return p.stack[--p.sp];
-}
-
-void pushChar(Process &p, char c) {
-    pushByte(p, c);
-    pushByte(p, CHAR);
-}
-
-char popChar(Process &p) {
-    return popByte(p);
-}
-
-void pushInt(Process &p, int i) {
-    pushByte(p, highByte(i));
-    pushByte(p, lowByte(i));
-    pushByte(p, INT);
-}
-
-int popInt(Process &p) {
-    if (p.sp < 2) {
-        Serial.println(F("Error: Not enough data on stack"));
-        return 0;
-    }
-    byte lowByte = popByte(p);
-    byte highByte = popByte(p);
-    int value = word(lowByte, highByte);
-    return value;
-}
-
-void pushFloat(Process &p, float f) {
-    byte* b = (byte*)&f;
-    for (int i = sizeof(float) - 1; i >= 0; i--) {
-        pushByte(p, b[i]);
-    }
-    pushByte(p, FLOAT);   
-}
-
-float popFloat(Process &p) {
-    byte b[sizeof(float)];
-    for (int i = sizeof(float) - 1; i >= 0; i--) {
-        b[i] = popByte(p);
-    }
-    float* f = (float*)b;
-    return *f;
-}
-
-void pushString(Process &p, const char* string) {
-    int length = strlen(string);
-    for (int i = 0; i < length; i++) {
-        pushByte(p, string[i]);
-    }
-    pushByte(p, '\0');           // Null-terminate the string
-    pushByte(p, length + 1);     // Push the length of the string including the null terminator
-    pushByte(p, STRING);         // Push the STRING type identifier
-}
-
-char* popString(Process &p) {
-    int length = popByte(p);
-    if (length <= 0) {
-        return NULL;  // Invalid length
-    }
-
-    char* result = (char*)malloc((length + 1) * sizeof(char));
-    if (result == NULL) {
-        return NULL;  // Memory allocation failed
-    }
-
-    for (int i = 0; i < length; i++) {
-        result[i] = popByte(p);
-    }
-    result[length] = '\0';  // Null-terminate the string
-
-    return result;
-}
-
-            
-void setVar(const char* name, int processID) {
-    // Check if processID is valid
-    if (processID < 0 || processID >= MAXPROCESSES) {
-        Serial.println(F("Error: Invalid process ID"));
-        return;
-    }
-
-    // Retrieve the process based on processID
-    Process* processPointer = &processes[processID]; 
-
-    // Check for space in the memory table
-    if (noOfVars >= MAX_VARS) {
-        Serial.println(F("Error: No space in memory table"));
-        return;
-    }
-    // Check if the variable with the same name and processID already exists
-    for (int i = 0; i < noOfVars; i++) {
-        if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
-            // Remove the existing variable by shifting entries
-            for (int j = i; j < noOfVars - 1; j++) {
-                memoryTable[j] = memoryTable[j + 1];
-            }
-            noOfVars--;
-            break;
-        }
-    }
-
-    // Check stack pointer
-    if (processPointer->sp < 1) {
-        Serial.println(F("Error: Not enough data on stack"));
-        return;
-    }
-
-    byte type = popByte(*processPointer);
-    int size = 0;
-
-    // Determine the size based on the type
-    switch (type) {
-        case CHAR:
-            size = sizeof(char);
-            break;
-        case INT:
-            size = sizeof(int);
-            break;
-        case FLOAT:
-            size = sizeof(float);
-            break;
-        case STRING:
-            if (stackPointer < 1) {
-                Serial.println(F("Error: Not enough data on stack for string length"));
-                return;
-            }
-            size = popByte(*processPointer);
-            break;
-        default:
-            Serial.println(F("Error: Unknown variable type"));
-            return;
-    }
-
-    // Add the new variable to memoryTable
-    if (noOfVars < MAX_VARS) {
-        strncpy(memoryTable[noOfVars].name, name, sizeof(memoryTable[noOfVars].name) - 1);
-        memoryTable[noOfVars].name[sizeof(memoryTable[noOfVars].name) - 1] = '\0'; // Ensure null termination
-        memoryTable[noOfVars].processID = processID;
-        memoryTable[noOfVars].size = size;
-        memoryTable[noOfVars].type = type;
-        noOfVars++;
-    } else {
-        Serial.println(F("Error: No space in memory table"));
-    }
-}
-
-void getVar(const char* name, int processID) {
-    // Validate the process ID
-    if (processID < 0 || processID >= MAXPROCESSES) {
-        Serial.println(F("Error: Invalid process ID"));
-        return;
-    }
-
-    // Retrieve the process based on processID
-    Process* processPointer = &processes[processID]; 
-
-    // Search the memoryTable for the variable
-    for (int i = 0; i < noOfVars; i++) {
-        if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
-            // Variable found; determine its type and retrieve its value
-            int size = memoryTable[i].size;
-            byte type = memoryTable[i].type;
-
-            // Serial.print(F("Variable '"));
-            // Serial.print(name);
-            // Serial.print(F("' Value: "));
-
-            switch (type) {
-                case CHAR:
-                    if (size == sizeof(char)) {
-                        //Serial.println(popChar(*processPointer));
-                    }
-                    break;
-                case INT:
-                    if (size == sizeof(int)) {
-                        //Serial.println(popInt(*processPointer));
-                    }
-                    break;
-                case FLOAT:
-                    if (size == sizeof(float)) {
-                        //Serial.println(popFloat(*processPointer), 6); // Print float with 6 decimal places
-                    }
-                    break;
-                case STRING:
-                    // Pop the length of the string
-                    if (size > 0) {
-                        char* str = popString(*processPointer);
-                        if (str != NULL) {
-                            // Serial.print(str);
-                            // free(str); // Free the allocated memory
-                        } else {
-                            Serial.println(F("Error: Failed to allocate memory for string"));
-                        }
-                    }
-                    break;
-                default:
-                    Serial.println(F("Error: Unknown variable type"));
-                    return;
-            }
-            return;
-        }
-    }
-
-    // Variable not found
-    Serial.println(F("Error: Variable not found"));
-}
-
 
 int findFreeSpaceInMemoryTable(int size) {
   for (int i = 0; i <= MEMORYSIZE - size; i++) {
@@ -598,15 +374,13 @@ void run() {
     // return;
     filename = inputBuffer;
   }
-
+  if (noOfProcesses >= MAXPROCESSES) {
+    Serial.println(F("Error: Process table is full."));
+    return;
+  }
   int index = findFileInFAT(filename);
   if (index == -1) {
     Serial.println(F("Error: File not found"));
-    return;
-  }
-
-  if (noOfProcesses >= MAXPROCESSES) {
-    Serial.println(F("Error: Process table is full."));
     return;
   }
 
@@ -762,47 +536,47 @@ void resumeProcess(int processID) {
 
 
 void kill() {
-  inputBuffer[0] = 0;    
-  char* processid;
-  while (!readToken(inputBuffer)) {
-    // Serial.println(F("Error: Unknown filename"));
-    // return;
-    processid = inputBuffer;
-  }
+    inputBuffer[0] = 0;
+    char* processid;
 
-  int processID = atoi(processid);
-  killProcess(processID);
-}
-
-void killProcess(int processID) {
-  int processIndex = -1;
-
-  for (int i = 0; i < noOfProcesses; i++) {
-    if (processes[i].processId == processID) {
-      processIndex = i;
-      break;
+    // Read the process ID token from the input buffer
+    while (!readToken(inputBuffer)) {
+        processid = inputBuffer;
     }
-  }
 
-  if (processIndex == -1) {
-    Serial.println(F("Error: Invalid process ID"));
-    return;
-  }
+    int processID = atoi(processid);
+    int processIndex = -1;
 
-  deleteVariables(processID);
+    // Search for the process with the given process ID
+    for (int i = 0; i < noOfProcesses; i++) {
+        if (processes[i].processId == processID && processes[i].state != '0') {
+            processIndex = i;
+            break;
+        }
+    }
 
-  for (int i = processIndex; i < noOfProcesses - 1; i++) {
-    processes[i] = processes[i + 1];
-    processes[i].processId = i;
-  }
+    // If the process wasn't found, print an error message
+    if (processIndex == -1) {
+        Serial.println(F("Error: Process could not be found."));
+        return;
+    }
 
-  noOfProcesses--;
-  processes[noOfProcesses].state = '0';
+    // Delete any variables associated with this process
+    deleteVariables(processID);
 
-  // Output success message
-  Serial.print(F("Process "));
-  Serial.print(processID);
-  Serial.println(F(" terminated successfully."));
+    // Shift the processes array to remove the terminated process
+    for (int i = processIndex; i < noOfProcesses - 1; i++) {
+        processes[i] = processes[i + 1];
+        processes[i].processId = i;
+    }
+
+    noOfProcesses--;
+    processes[noOfProcesses].state = '0';
+
+    // Output success message
+    Serial.print(F("Process "));
+    Serial.print(processID);
+    Serial.println(F(" terminated successfully."));
 }
 
 
@@ -828,7 +602,7 @@ void deleteAllFiles() {
 
 
 static commandType command[] = {
-   { "help", &help },
+   //{ "help", &help },
    { "store", &store },
    { "retrieve", &retrieve },
    { "erase", &erase },
@@ -852,24 +626,378 @@ void help() {
 }
 
 
-void processCommand(char* input) {
-  for (int i = 0; i < nCommands; i++) {
-    if (strcmp(input, command[i].name) == 0) {
-      command[i].func();
-      return;
+// void processCommand(char* input) {
+//   for (int i = 0; i < nCommands; i++) {
+//     if (strcmp(input, command[i].name) == 0) {
+//       command[i].func();
+//       return;
+//     }
+//   }
+//   Serial.println(F("Unknown command. Type 'help' for a list of commands."));
+// }
+
+
+void pushByte(Process &p, byte b) {
+    if (p.sp >= STACKSIZE) {
+        Serial.println(F("Error: Stack overflow"));
+        return;
     }
-  }
-  Serial.println(F("Unknown command. Type 'help' for a list of commands."));
+    p.stack[p.sp++] = b;
 }
+
+byte popByte(Process &p) {
+    if (p.sp <= 0) {
+        Serial.println(F("Error: Stack underflow"));
+        return 0;
+    }
+    return p.stack[--p.sp];
+}
+
+void pushChar(Process &p, char c) {
+    pushByte(p, c);
+    pushByte(p, CHAR);
+}
+
+char popChar(Process &p) {
+    return popByte(p);
+}
+
+void pushInt(Process &p, int i) {
+    pushByte(p, highByte(i));
+    pushByte(p, lowByte(i));
+    pushByte(p, INT);
+}
+
+int popInt(Process &p) {
+    if (p.sp < 2) {
+        Serial.println(F("Error: Not enough data on stack"));
+        return 0;
+    }
+    byte lowByte = popByte(p);
+    byte highByte = popByte(p);
+    int value = word(lowByte, highByte);
+    return value;
+}
+
+void pushFloat(Process &p, float f) {
+    byte* b = (byte*)&f;
+    for (int i = sizeof(float) - 1; i >= 0; i--) {
+        pushByte(p, b[i]);
+    }
+    pushByte(p, FLOAT);   
+}
+
+float popFloat(Process &p) {
+    byte b[sizeof(float)];
+    for (int i = sizeof(float) - 1; i >= 0; i--) {
+        b[i] = popByte(p);
+    }
+    float* f = (float*)b;
+    return *f;
+}
+
+void pushString(Process &p, const char* string) {
+    int length = strlen(string);
+    for (int i = 0; i < length; i++) {
+        pushByte(p, string[i]);
+    }
+    pushByte(p, '\0');           
+    pushByte(p, length + 1);     
+    pushByte(p, STRING);          
+}
+
+char* popString(Process &p) {
+    int length = popByte(p);
+    if (length <= 0) {
+        return NULL;  
+    }
+
+    char* result = (char*)malloc((length + 1) * sizeof(char));
+    if (result == NULL) {
+        return NULL;  // Memory allocation failed
+    }
+
+    for (int i = 0; i < length; i++) {
+        result[i] = popByte(p);
+    }
+    result[length] = '\0';  // Null-terminate the string
+
+    return result;
+}
+
+            
+void setVar(const char* name, int processID) {
+    // Check if processID is valid
+    if (processID < 0 || processID >= MAXPROCESSES) {
+        Serial.println(F("Error: Invalid process ID"));
+        return;
+    }
+
+    // Retrieve the process based on processID
+    Process* processPointer = &processes[processID]; 
+
+    // Check for space in the memory table
+    if (noOfVars >= MAX_VARS) {
+        Serial.println(F("Error: No space in memory table"));
+        return;
+    }
+    // Check if the variable with the same name and processID already exists
+    for (int i = 0; i < noOfVars; i++) {
+        if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
+            // Remove the existing variable by shifting entries
+            for (int j = i; j < noOfVars - 1; j++) {
+                memoryTable[j] = memoryTable[j + 1];
+            }
+            noOfVars--;
+            break;
+        }
+    }
+
+    // Check stack pointer
+    if (processPointer->sp < 1) {
+        Serial.println(F("Error: Not enough data on stack"));
+        return;
+    }
+
+    byte type = popByte(*processPointer);
+    int size = 0;
+
+    // Determine the size based on the type
+    switch (type) {
+        case CHAR:
+            size = sizeof(char);
+            break;
+        case INT:
+            size = sizeof(int);
+            break;
+        case FLOAT:
+            size = sizeof(float);
+            break;
+        case STRING:
+            if (stackPointer < 1) {
+                Serial.println(F("Error: Not enough data on stack for string length"));
+                return;
+            }
+            size = popByte(*processPointer);
+            break;
+        default:
+            Serial.println(F("Error: Unknown variable type"));
+            return;
+    }
+
+    // Add the new variable to memoryTable
+    if (noOfVars < MAX_VARS) {
+        strncpy(memoryTable[noOfVars].name, name, sizeof(memoryTable[noOfVars].name) - 1);
+        memoryTable[noOfVars].name[sizeof(memoryTable[noOfVars].name) - 1] = '\0'; // Ensure null termination
+        memoryTable[noOfVars].processID = processID;
+        memoryTable[noOfVars].size = size;
+        memoryTable[noOfVars].type = type;
+        noOfVars++;
+    } else {
+        Serial.println(F("Error: No space in memory table"));
+    }
+}
+
+void getVar(const char* name, int processID) {
+    // Validate the process ID
+    if (processID < 0 || processID >= MAXPROCESSES) {
+        Serial.println(F("Error: Invalid process ID"));
+        return;
+    }
+
+    // Retrieve the process based on processID
+    Process* processPointer = &processes[processID]; 
+
+    // Search the memoryTable for the variable
+    for (int i = 0; i < noOfVars; i++) {
+        if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
+            // Variable found; determine its type and retrieve its value
+            int size = memoryTable[i].size;
+            byte type = memoryTable[i].type;
+
+            // Serial.print(F("Variable '"));
+            // Serial.print(name);
+            // Serial.print(F("' Value: "));
+
+            switch (type) {
+                case CHAR:
+                    if (size == sizeof(char)) {
+                        //Serial.println(popChar(*processPointer));
+                    }
+                    break;
+                case INT:
+                    if (size == sizeof(int)) {
+                        //Serial.println(popInt(*processPointer));
+                    }
+                    break;
+                case FLOAT:
+                    if (size == sizeof(float)) {
+                        //Serial.println(popFloat(*processPointer), 6); // Print float with 6 decimal places
+                    }
+                    break;
+                case STRING:
+                    // Pop the length of the string
+                    if (size > 0) {
+                        char* str = popString(*processPointer);
+                        if (str != NULL) {
+                            // Serial.print(str);
+                            // free(str); // Free the allocated memory
+                        } else {
+                            Serial.println(F("Error: Failed to allocate memory for string"));
+                        }
+                    }
+                    break;
+                default:
+                    Serial.println(F("Error: Unknown variable type"));
+                    return;
+            }
+            return;
+        }
+    }
+
+    // Variable not found
+    Serial.println(F("Error: Variable not found"));
+}
+
 
 void runProcesses() {
   for (int i = 0; i < noOfProcesses; i++) {
     if (processes[i].state == 'r') {  // Check if the process is RUNNING
-      //execute(i);                     // Execute the next instruction for this process
-      delay(200);                     // Delay to allow other operations and avoid overwhelming the CPU
+      execute(i);                     // Execute the next instruction for this process
+      // delay(200);                     // Delay to allow other operations and avoid overwhelming the CPU
     }
   }
 }
+
+void execute(int processIndex) {
+    Process& p = processes[processIndex];  // Direct reference to the Process struct
+    fileType* fileEntry = nullptr;
+    for (int i = 0; i < noOfFiles; i++) {
+        if (strcmp(FAT[i].name, p.name) == 0) {
+            fileEntry = &FAT[i];
+            break;
+        }
+    }
+
+    // // If no corresponding file entry is found, print an error and exit
+    // if (fileEntry == nullptr) {
+    //     Serial.println(F("Error: Corresponding file entry not found."));
+    //     return;
+    // }
+
+    int endAddress = fileEntry->start + fileEntry->size;
+
+    // Debugging: Print the current PC and file details
+    // Serial.print(F("Process ID: "));
+    // Serial.println(p.processId);
+    // Serial.print(F("File Start Address: "));
+    // Serial.println(fileEntry->start);
+    // Serial.print(F("File Size: "));
+    // Serial.println(fileEntry->size);
+    // Serial.print(F("File End Address: "));
+    // Serial.println(endAddress);
+    // Serial.print(F("Current PC: "));
+    // Serial.println(p.pc);
+
+    // Check if the PC is within the bounds of the file
+    if (p.pc >= endAddress) {
+        Serial.println(F("End of file reached. No more instructions to execute."));
+        p.state = 't';  // Mark the process as terminated
+        return;
+    }
+
+    // Read the instruction from EEPROM and execute it
+    byte instruction = EEPROM.read(p.pc);
+    p.pc += 1;  // Increment the Program Counter
+
+    // Debugging: Print the instruction read
+    Serial.print(F("Executing Instruction Code: "));
+    Serial.println(instruction);
+
+
+    switch (instruction) {
+          case CHAR: {
+            char value = (char)EEPROM.read(p.pc++);
+            pushChar(p, value);
+            break;
+        }
+        case INT: {
+            int value = EEPROM.read(p.pc) | (EEPROM.read(p.pc + 1) << 8);
+            p.pc += 2;
+            pushInt(p, value);
+            break;
+        }
+        case FLOAT: {
+            float value;
+            byte* bytePointer = (byte*)&value;
+            for (int i = 0; i < sizeof(float); i++) {
+                bytePointer[i] = EEPROM.read(p.pc++);
+            }
+            pushFloat(p, value);
+            break;
+        }
+        case STRING: {
+            char ch;
+            int length = 0;
+            while ((ch = EEPROM.read(p.pc++)) != '\0') {
+                pushByte(p, ch);
+                length++;
+            }
+            pushByte(p, '\0');  // Null-terminate the string
+            pushByte(p, length + 1);  // Store the length of the string (including the null character)
+            pushByte(p, STRING);
+            break;
+        }
+        case PRINT: {
+            byte type = popByte(p);
+            switch (type) {
+                case CHAR:
+                    Serial.print((char)popChar(p));
+                    break;
+                case INT:
+                    Serial.print(popInt(p));
+                    break;
+                case FLOAT:
+                    Serial.print(popFloat(p), 6);  // Print float with 6 decimal places
+                    break;
+                case STRING: {
+                    char* str = popString(p);
+                    if (str != NULL) {
+                        Serial.print(str);
+                        free(str);
+                    }
+                    break;
+                }
+                default:
+                    Serial.println(F("Error: Unknown type in PRINT"));
+                    break;
+            }
+            break;
+        }
+        case PRINTLN: {
+            execute(processIndex);  // Reuse PRINT logic
+            Serial.println();
+            break;
+        }
+        case SET: {
+            byte varName = EEPROM.read(p.pc++);
+            setVar((char*)&varName, processIndex);
+            break;
+        }
+        case GET: {
+            byte varName = EEPROM.read(p.pc++);
+            getVar((char*)&varName, processIndex);
+            break;
+        }
+        // Add more cases for arithmetic, logic, control, and other operations
+        default: {
+            Serial.println(F("Error: Unknown instruction"));
+            break;
+        }
+    }
+ }
+
+
 bool readToken(char Buffer[]) {
   int i = strlen(Buffer);
   char c;
@@ -893,6 +1021,8 @@ void clearSerialBuffer() {
     delayMicroseconds(1042);
     }
 }
+
+
 
 void loop() {
     if (readToken(inputBuffer)) {
