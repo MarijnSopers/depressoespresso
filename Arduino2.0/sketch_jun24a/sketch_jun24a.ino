@@ -7,7 +7,7 @@
 #define MAX_FILES 10
 #define EEPROM_SIZE 1024
 
-#define MAXPROCESSES 10
+#define MAXPROCESSES 5
 #define STACKSIZE 32
 #define MEMORYSIZE 256
 
@@ -35,7 +35,7 @@ typedef struct {
 typedef struct {
   char name[FILENAMESIZE];
   int processId;
-  char state;
+  byte state;
   int pc;
   int fp;
   int sp;
@@ -98,17 +98,17 @@ int findFreeSpaceInMemoryTable(int size) {
   return -1;  // No free space
 }
 
-void deleteVariables(int processID) {
-  for (int i = 0; i < noOfVars; i++) {
-    if (memoryTable[i].processID == processID) {
-      for (int j = i; j < noOfVars - 1; j++) {
-        memoryTable[j] = memoryTable[j + 1];
-      }
-      noOfVars--;
-      i--;
-    }
-  }
-}
+// void deleteVariables(int processID) {
+//   for (int i = 0; i < noOfVars; i++) {
+//     if (memoryTable[i].processID == processID) {
+//       for (int j = i; j < noOfVars - 1; j++) {
+//         memoryTable[j] = memoryTable[j + 1];
+//       }
+//       noOfVars--;
+//       i--;
+//     }
+//   }
+// }
 
 void store() {
     // Clear buffer
@@ -241,11 +241,6 @@ int findFreeSpace(int fileSize) {
 
 void writeFATEntry(int index) {
   EEPROM.put(index * sizeof(fileType), FAT[index]);
-
-  // Serial.print("FAT entry ");
-  // Serial.print(index);
-  // Serial.print(" written at EEPROM address: ");
-  //Serial.println((index * sizeof(fileType));
 }
 
 void retrieve() {
@@ -338,7 +333,6 @@ void erase() {
 
 
 void files() {
-
   Serial.println("Listing files:");
   for (int i = 0; i < noOfFiles; i++) {
     Serial.print(FAT[i].name);
@@ -354,7 +348,6 @@ void files() {
 
 void freespace() {
   int maxFreeSpace = EEPROM_SIZE - 161;
-
   for (int i = 0; i < MAX_FILES; i++) {
     if (FAT[i].size > 0) {
       maxFreeSpace -= FAT[i].size;
@@ -370,8 +363,6 @@ void run() {
   inputBuffer[0] = 0;    
   char* filename;
   while (!readToken(inputBuffer)) {
-    // Serial.println(F("Error: Unknown filename"));
-    // return;
     filename = inputBuffer;
   }
   if (noOfProcesses >= MAXPROCESSES) {
@@ -413,11 +404,11 @@ void run() {
     noOfProcesses++;
   }
 
-  Serial.print(F("Process "));
-  Serial.print(filename);
-  Serial.print(F(" with ID "));
-  Serial.print(processId);
-  Serial.println(F(" started successfully."));
+//   Serial.print(F("Process "));
+//   Serial.print(filename);
+//   Serial.print(F(" with ID "));
+//   Serial.print(processId);
+//   Serial.println(F(" started successfully."));
 }
 
 
@@ -561,8 +552,8 @@ void kill() {
         return;
     }
 
-    // Delete any variables associated with this process
-    deleteVariables(processID);
+    // // Delete any variables associated with this process
+    //deleteVariables(processID);
 
     // Shift the processes array to remove the terminated process
     for (int i = processIndex; i < noOfProcesses - 1; i++) {
@@ -581,10 +572,10 @@ void kill() {
 
 
 
-// void show() {
-//   // Serial.println(F("Show command");
-//   // Serial.println((noOfFiles);
-// }
+void show() {
+  Serial.println(F("Show command"));
+  Serial.println(noOfFiles);
+}
 
 void deleteAllFiles() {
   //Serial.println(("Deleting all files...");
@@ -602,7 +593,7 @@ void deleteAllFiles() {
 
 
 static commandType command[] = {
-   //{ "help", &help },
+   { "help", &help },
    { "store", &store },
    { "retrieve", &retrieve },
    { "erase", &erase },
@@ -612,9 +603,9 @@ static commandType command[] = {
    { "list", &list },
    { "suspend", &suspend },
    { "resume", &resume },
-   //{ "kill", &kill },
-  { "deleteall", &deleteAllFiles },
-  //{ "show", &show },
+  { "kill", &kill },
+   { "deleteall", &deleteAllFiles },
+  { "show", &show },
 };
 static int nCommands = sizeof(command) / sizeof(commandType);
 
@@ -624,18 +615,6 @@ void help() {
     Serial.println(command[i].name);
   }
 }
-
-
-// void processCommand(char* input) {
-//   for (int i = 0; i < nCommands; i++) {
-//     if (strcmp(input, command[i].name) == 0) {
-//       command[i].func();
-//       return;
-//     }
-//   }
-//   Serial.println(F("Unknown command. Type 'help' for a list of commands."));
-// }
-
 
 void pushByte(Process &p, byte b) {
     if (p.sp >= STACKSIZE) {
@@ -870,59 +849,27 @@ void runProcesses() {
 }
 
 void execute(int processIndex) {
-    Process& p = processes[processIndex];  // Direct reference to the Process struct
-    fileType* fileEntry = nullptr;
-    for (int i = 0; i < noOfFiles; i++) {
-        if (strcmp(FAT[i].name, p.name) == 0) {
-            fileEntry = &FAT[i];
-            break;
-        }
-    }
+    Process& p = processes[processIndex];  // Get reference to the process
+    int address = p.fp;  // Frame Pointer
+    int pc = p.pc;       // Program Counter
 
-    // // If no corresponding file entry is found, print an error and exit
-    // if (fileEntry == nullptr) {
-    //     Serial.println(F("Error: Corresponding file entry not found."));
-    //     return;
-    // }
+    // Read the instruction from EEPROM
+    byte instruction = EEPROM.read(address + pc);
+    p.pc += 1;  // Move PC to the next instruction
 
-    int endAddress = fileEntry->start + fileEntry->size;
-
-    // Debugging: Print the current PC and file details
-    // Serial.print(F("Process ID: "));
-    // Serial.println(p.processId);
-    // Serial.print(F("File Start Address: "));
-    // Serial.println(fileEntry->start);
-    // Serial.print(F("File Size: "));
-    // Serial.println(fileEntry->size);
-    // Serial.print(F("File End Address: "));
-    // Serial.println(endAddress);
-    // Serial.print(F("Current PC: "));
-    // Serial.println(p.pc);
-
-    // Check if the PC is within the bounds of the file
-    if (p.pc >= endAddress) {
-        Serial.println(F("End of file reached. No more instructions to execute."));
-        p.state = 't';  // Mark the process as terminated
-        return;
-    }
-
-    // Read the instruction from EEPROM and execute it
-    byte instruction = EEPROM.read(p.pc);
-    p.pc += 1;  // Increment the Program Counter
-
-    // Debugging: Print the instruction read
-    Serial.print(F("Executing Instruction Code: "));
+    Serial.print(F("Executing instruction at PC: "));
+    Serial.println(pc);
+    Serial.print(F("Instruction code: "));
     Serial.println(instruction);
 
-
     switch (instruction) {
-          case CHAR: {
-            char value = (char)EEPROM.read(p.pc++);
+        case CHAR: {
+            char value = (char)EEPROM.read(address + p.pc++);
             pushChar(p, value);
             break;
         }
         case INT: {
-            int value = EEPROM.read(p.pc) | (EEPROM.read(p.pc + 1) << 8);
+            int value = EEPROM.read(address + p.pc) | (EEPROM.read(address + p.pc + 1) << 8);
             p.pc += 2;
             pushInt(p, value);
             break;
@@ -930,16 +877,17 @@ void execute(int processIndex) {
         case FLOAT: {
             float value;
             byte* bytePointer = (byte*)&value;
-            for (int i = 0; i < sizeof(float); i++) {
-                bytePointer[i] = EEPROM.read(p.pc++);
+            for (int i = sizeof(float) - 1; i >= 0; i--) {
+                bytePointer[i] = EEPROM.read(address + p.pc++);
             }
             pushFloat(p, value);
             break;
         }
+
         case STRING: {
             char ch;
             int length = 0;
-            while ((ch = EEPROM.read(p.pc++)) != '\0') {
+            while ((ch = EEPROM.read(address + p.pc++)) != '\0') {
                 pushByte(p, ch);
                 length++;
             }
@@ -975,27 +923,76 @@ void execute(int processIndex) {
             break;
         }
         case PRINTLN: {
-            execute(processIndex);  // Reuse PRINT logic
-            Serial.println();
+            byte type = popByte(p);
+            switch (type) {
+                case CHAR:
+                    Serial.println((char)popChar(p));
+                    break;
+                case INT:
+                    Serial.println(popInt(p));
+                    break;
+                case FLOAT:
+                    Serial.println(popFloat(p), 6);  // Print float with 6 decimal places
+                    break;
+                case STRING: {
+                    char* str = popString(p);
+                    if (str != NULL) {
+                        Serial.println(str);
+                        free(str);
+                    }
+                    break;
+                }
+                default:
+                    Serial.println(F("Error: Unknown type in PRINTLN"));
+                    break;
+            }
             break;
         }
         case SET: {
-            byte varName = EEPROM.read(p.pc++);
+            byte varName = EEPROM.read(address + p.pc++);
             setVar((char*)&varName, processIndex);
             break;
         }
         case GET: {
-            byte varName = EEPROM.read(p.pc++);
+            byte varName = EEPROM.read(address + p.pc++);
             getVar((char*)&varName, processIndex);
             break;
         }
-        // Add more cases for arithmetic, logic, control, and other operations
+        case PLUS: {
+            int b = popInt(p);
+            int a = popInt(p);
+            pushInt(p, a + b);
+            break;
+        }
+        case MINUS: {
+            int b = popInt(p);
+            int a = popInt(p);
+            pushInt(p, a - b);
+            break;
+        }
+        case INCREMENT: {
+            int value = popInt(p);
+            pushInt(p, value + 1);
+            break;
+        }
+        case DECREMENT: {
+            int value = popInt(p);
+            pushInt(p, value - 1);
+            break;
+        }
+       case STOP: {  // Assuming STOP is the instruction code for stopping a process
+            p.state = 's';  // Directly set the state to 's' for stopped
+            Serial.print(F("Process "));
+            Serial.print(processIndex);
+            Serial.println(F(" stopped."));
+            break;
+        }
         default: {
             Serial.println(F("Error: Unknown instruction"));
             break;
         }
     }
- }
+}
 
 
 bool readToken(char Buffer[]) {
@@ -1021,8 +1018,6 @@ void clearSerialBuffer() {
     delayMicroseconds(1042);
     }
 }
-
-
 
 void loop() {
     if (readToken(inputBuffer)) {
