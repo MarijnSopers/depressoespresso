@@ -864,7 +864,11 @@ void execute(int processIndex) {
 
     switch (instruction) {
         case CHAR: {
-            char value = (char)EEPROM.read(address + p.pc++);
+            // Read the next byte as a character value
+            p.pc += 1; 
+            char value = EEPROM.read(address + p.pc);
+            p.pc += 1;  // Move PC past the character value
+
             pushChar(p, value);
             break;
         }
@@ -875,8 +879,10 @@ void execute(int processIndex) {
             break;
         }
         case FLOAT: {
+            Serial.println("in float");
             float value;
             byte* bytePointer = (byte*)&value;
+            //filp.pc += 1; 
             for (int i = sizeof(float) - 1; i >= 0; i--) {
                 bytePointer[i] = EEPROM.read(address + p.pc++);
             }
