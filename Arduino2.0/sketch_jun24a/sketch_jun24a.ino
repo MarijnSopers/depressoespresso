@@ -658,6 +658,7 @@ int popInt(Process &p) {
     return value;
 }
 
+
 void pushFloat(Process &p, float f) {
     byte* b = (byte*)&f;
     for (int i = sizeof(float) - 1; i >= 0; i--) {
@@ -857,33 +858,30 @@ void execute(int processIndex) {
     byte instruction = EEPROM.read(address + pc);
     p.pc += 1;  // Move PC to the next instruction
 
-    Serial.print(F("Executing instruction at PC: "));
-    Serial.println(pc);
-    Serial.print(F("Instruction code: "));
-    Serial.println(instruction);
+    // Serial.print(F("Executing instruction at PC: "));
+    // Serial.println(pc);
+    // Serial.print(F("Instruction code: "));
+    // Serial.println(instruction);
 
     switch (instruction) {
         case CHAR: {
-            // Read the next byte as a character value
             p.pc += 1; 
             char value = EEPROM.read(address + p.pc);
-            p.pc += 1;  // Move PC past the character value
-
+            p.pc += 1;
             pushChar(p, value);
             break;
         }
-        case INT: {
+      case INT: {
             int value = EEPROM.read(address + p.pc) | (EEPROM.read(address + p.pc + 1) << 8);
             p.pc += 2;
             pushInt(p, value);
             break;
-        }
+      }
         case FLOAT: {
             Serial.println("in float");
             float value;
             byte* bytePointer = (byte*)&value;
-            //filp.pc += 1; 
-            for (int i = sizeof(float) - 1; i >= 0; i--) {
+            for (int i = 0; i < sizeof(float); i++) {
                 bytePointer[i] = EEPROM.read(address + p.pc++);
             }
             pushFloat(p, value);
