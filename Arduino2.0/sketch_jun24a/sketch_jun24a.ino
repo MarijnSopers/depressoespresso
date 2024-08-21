@@ -690,22 +690,24 @@ void pushString(Process &p, const char* string) {
 
 char* popString(Process &p) {
     int length = popByte(p);
+
     if (length <= 0) {
         return NULL;  
     }
+    char* result = (char*)malloc(length * sizeof(char));
 
-    char* result = (char*)malloc((length + 1) * sizeof(char));
     if (result == NULL) {
-        return NULL;  // Memory allocation failed
+        return NULL;  
     }
-
-    for (int i = 0; i < length; i++) {
+    for (int i = length - 1; i >= 0; --i) {
         result[i] = popByte(p);
     }
-    result[length] = '\0';  // Null-terminate the string
+
+    result[length] = '\0';   
 
     return result;
 }
+
 
             
 void setVar(const char* name, int processID) {
@@ -880,7 +882,6 @@ void execute(int processIndex) {
             break;
       }
         case FLOAT: {
-            //Serial.println("in float");
             float value;
             byte* bytePointer = (byte*)&value;
             for (int i = 0; i < sizeof(float); i++) {
@@ -892,19 +893,13 @@ void execute(int processIndex) {
 case STRING: {
     String str = "";
     char ch;
-    
-    // Read characters from EEPROM until null terminator
-    while ((ch = EEPROM.read(address + p.pc++)) != '\0') {
-        // Serial.print(F("Read character: "));
-        // Serial.println(ch, HEX);  // Print in hex for debugging
-        
-        str += ch;  // Append the character to the string
+    while ((ch = EEPROM.read(address + p.pc++)) != '\0') {     
+        str += ch;   
     }
+    // Serial.println(str);
     pushString(p, str.c_str());
     break;
 }
-
-
         case PRINT: {
             byte type = popByte(p);
             switch (type) {
@@ -915,7 +910,7 @@ case STRING: {
                     Serial.print(popInt(p));
                     break;
                 case FLOAT:
-                    Serial.print(popFloat(p), 6);  // Print float with 6 decimal places
+                    Serial.print(popFloat(p), 6);   
                     break;
                 case STRING: {
                     Serial.print(popString(p));
