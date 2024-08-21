@@ -640,7 +640,7 @@ void pushChar(Process &p, char c) {
 char popChar(Process &p) {
     return popByte(p);
 }
-
+ 
 void pushInt(Process &p, int i) {
     pushByte(p, highByte(i));
     pushByte(p, lowByte(i));
@@ -677,8 +677,10 @@ float popFloat(Process &p) {
 }
 
 void pushString(Process &p, const char* string) {
-    int length = strlen(string);
+    int length = strlen(string );
     for (int i = 0; i < length; i++) {
+        // Serial.print("pushing:");
+        // Serial.println(string[i]);
         pushByte(p, string[i]);
     }
     pushByte(p, '\0');           
@@ -878,7 +880,7 @@ void execute(int processIndex) {
             break;
       }
         case FLOAT: {
-            Serial.println("in float");
+            //Serial.println("in float");
             float value;
             byte* bytePointer = (byte*)&value;
             for (int i = 0; i < sizeof(float); i++) {
@@ -887,19 +889,22 @@ void execute(int processIndex) {
             pushFloat(p, value);
             break;
         }
+case STRING: {
+    String str = "";
+    char ch;
+    
+    // Read characters from EEPROM until null terminator
+    while ((ch = EEPROM.read(address + p.pc++)) != '\0') {
+        // Serial.print(F("Read character: "));
+        // Serial.println(ch, HEX);  // Print in hex for debugging
+        
+        str += ch;  // Append the character to the string
+    }
+    pushString(p, str.c_str());
+    break;
+}
 
-        case STRING: {
-            char ch;
-            int length = 0;
-            while ((ch = EEPROM.read(address + p.pc++)) != '\0') {
-                pushByte(p, ch);
-                length++;
-            }
-            pushByte(p, '\0');  // Null-terminate the string
-            pushByte(p, length + 1);  // Store the length of the string (including the null character)
-            pushByte(p, STRING);
-            break;
-        }
+
         case PRINT: {
             byte type = popByte(p);
             switch (type) {
@@ -913,11 +918,7 @@ void execute(int processIndex) {
                     Serial.print(popFloat(p), 6);  // Print float with 6 decimal places
                     break;
                 case STRING: {
-                    char* str = popString(p);
-                    if (str != NULL) {
-                        Serial.print(str);
-                        free(str);
-                    }
+                    Serial.print(popString(p));
                     break;
                 }
                 default:
@@ -939,11 +940,7 @@ void execute(int processIndex) {
                     Serial.println(popFloat(p), 6);  // Print float with 6 decimal places
                     break;
                 case STRING: {
-                    char* str = popString(p);
-                    if (str != NULL) {
-                        Serial.println(str);
-                        free(str);
-                    }
+                    Serial.println(popString(p));
                     break;
                 }
                 default:
