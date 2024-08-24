@@ -727,11 +727,21 @@ char* popString(Process &p) {
     return result;
 }
 
+byte peekByte(Process& p) {
+    // Example implementation
+    if (p.sp <= 0) {
+        Serial.println(F("Error: Stack underflow"));
+        return 0;
+    }
+    return p.stack[p.sp - 1];
+}
+
+
 void setVar(const char* name, int processID) {
-    Serial.print(F("Debug: Setting variable with name: "));
-    Serial.println(name);
-    Serial.print(F("Debug: Process ID: "));
-    Serial.println(processID);
+    // Serial.print(F("Debug: Setting variable with name: "));
+    // Serial.println(name);
+    // Serial.print(F("Debug: Process ID: "));
+    // Serial.println(processID);
 
 
     Process* processPointer = &processes[processID]; 
@@ -756,11 +766,11 @@ void setVar(const char* name, int processID) {
         }
     }
 
-    if (found) {
-        Serial.println(F("Debug: Existing variable removed successfully"));
-    } else {
-        Serial.println(F("Debug: No existing variable found to remove"));
-    }
+    // if (found) {
+    //     Serial.println(F("Debug: Existing variable removed successfully"));
+    // } else {
+    //     Serial.println(F("Debug: No existing variable found to remove"));
+    // }
 
     byte type = popByte(*processPointer);
     int size = 0;
@@ -786,13 +796,13 @@ void setVar(const char* name, int processID) {
             return;
     }
 
-    Serial.print(F("Debug: Variable size determined: "));
-    Serial.println(size);
+    // Serial.print(F("Debug: Variable size determined: "));
+    // Serial.println(size);
 
     int address = findFreeSpaceInMemoryTable(size);
 
-    Serial.print(F("Debug: Free space found at address: "));
-    Serial.println(address);
+    // Serial.print(F("Debug: Free space found at address: "));
+    // Serial.println(address);
 
     if (noOfVars < MAX_VARS) {
         strncpy(memoryTable[noOfVars].name, name, sizeof(memoryTable[noOfVars].name) - 1);
@@ -911,42 +921,43 @@ void execute(int processIndex) {
             pushChar(p, value);
             break;
         }
-      case INT: {
+        case INT: {
+            // Read 2 bytes for integer (little-endian)
             int value = EEPROM.read(address + p.pc) | (EEPROM.read(address + p.pc + 1) << 8);
             p.pc += 2;
+            Serial.println(value);
             pushInt(p, value);
             break;
-      }
-      case FLOAT: {
-          float value;
-          byte* bytePointer = (byte*)&value;
+        }
+        case FLOAT: {
+            float value;
+            byte* bytePointer = (byte*)&value;
 
-          // Read in the correct order (little-endian)
-          for (int i = 3; i >= 0; i--) {
-              bytePointer[i] = EEPROM.read(address + p.pc++);
-          }
+            // Read 4 bytes for float (little-endian)
+            for (int i = 3; i >= 0; i--) {
+                bytePointer[i] = EEPROM.read(address + p.pc++);
+            }
 
-          Serial.print(F("Float bytes: "));
-          for (int i = 0; i < 4; i++) {
-              Serial.print(bytePointer[i]);
-              Serial.print(" ");
-          }
-          Serial.println();
+            Serial.print(F("Float bytes: "));
+            for (int i = 0; i < 4; i++) {
+                Serial.print(bytePointer[i]);
+                Serial.print(" ");
+            }
+            // Serial.println();
 
-          Serial.print(F("Float value: "));
-          Serial.println(value);
+            // Serial.print(F("Float value: "));
+            // Serial.println(value, 6); // Print float with 6 decimal places
 
-          pushFloat(p, value);
-
-          break;
-      }
+            pushFloat(p, value);
+            break;
+        }
         case STRING: {
             String str = "";
             char ch;
-            while ((ch = EEPROM.read(address + p.pc++)) != '\0') {     
-                str += ch;   
+            // Read until null terminator
+            while ((ch = EEPROM.read(address + p.pc++)) != '\0') {
+                str += ch;
             }
-            // Serial.println(str);
             pushString(p, str.c_str());
             break;
         }
@@ -973,9 +984,7 @@ void execute(int processIndex) {
         }
         case PRINTLN: {
             byte type = popByte(p);
-                            Serial.println(F("printing"));
             switch (type) {
-
                 case CHAR:
                     Serial.println((char)popChar(p));
                     break;
@@ -983,61 +992,40 @@ void execute(int processIndex) {
                     Serial.println(popInt(p));
                     break;
                 case FLOAT:
-                    Serial.println("printfloat");
                     Serial.println(popFloat(p));  // Print float with 6 decimal places
                     break;
                 case STRING: 
                     Serial.println(popString(p));
                     break;
-              
                 default:
                     Serial.println(F("Error: Unknown type in PRINTLN"));
                     break;
             }
             break;
         }
-case SET: {
-    byte varName = EEPROM.read(address + p.pc++);
-    Serial.print(F("Debug: varName: "));
-    Serial.println(varName);
-
-    char varNameStr[2];  
-    varNameStr[0] = varName;  
-    varNameStr[1] = '\0';     
-
-    setVar(varNameStr, processIndex);
-    break;
-}
-
-
+        case SET: {
+            byte varName = EEPROM.read(address + p.pc++);
+            char varNameStr[2];
+            varNameStr[0] = varName;
+            varNameStr[1] = '\0'; // Null-terminate the string
+            setVar(varNameStr, processIndex);
+            break;
+        }
         case GET: {
             byte varName = EEPROM.read(address + p.pc++);
             getVar((char*)&varName, processIndex);
             break;
         }
-        case PLUS: {
-            int b = popInt(p);
-            int a = popInt(p);
-            pushInt(p, a + b);
-            break;
-        }
-        case MINUS: {
-            int b = popInt(p);
-            int a = popInt(p);
-            pushInt(p, a - b);
-            break;
-        }
         case INCREMENT: {
-            int value = popInt(p);
-            pushInt(p, value + 1);
+            Serial.println("incrmeent");
+           unaireOperator(INCREMENT, processIndex);
             break;
         }
         case DECREMENT: {
-            int value = popInt(p);
-            pushInt(p, value - 1);
+           unaireOperator(DECREMENT, processIndex);
             break;
         }
-       case STOP: {  // Assuming STOP is the instruction code for stopping a process
+        case STOP: {  // Assuming STOP is the instruction code for stopping a process
             p.state = 's';  // Directly set the state to 's' for stopped
             Serial.print(F("Process "));
             Serial.print(processIndex);
@@ -1050,6 +1038,64 @@ case SET: {
         }
     }
 }
+
+void unaireOperator(byte typeOperator, int index) {
+    Process& p = processes[index];  // Access the specific process
+
+    byte type = popByte(p);         // Get the type of the value from the stack
+    float var;   
+    int intValue;                  // Use int for integer values
+
+    // Pop the value from the stack based on its type
+    switch (type) {
+        case CHAR:
+            var = (int)popChar(p);
+            break;
+        case INT:
+            intValue = (int)popInt(p);
+            break;
+        case FLOAT:
+            var = (float)popFloat(p);  // Cast float to int if needed
+            Serial.println(var);
+            break;
+        default:
+            Serial.println(F("Error: Unknown type for unary operation"));
+            return;
+    }
+
+    // Apply the unary operation
+    switch (typeOperator) {
+        case INCREMENT:
+            var += 1;
+            break;
+        case DECREMENT:
+            var -= 1;
+            break;
+        default:
+            Serial.println(F("Error: Unknown unary operation"));
+            return;
+    }
+
+    // Push the updated value back onto the stack
+    switch (type) {
+        case CHAR:
+            pushChar(p, (char)var);
+            break;
+        case INT:
+            // Split the int into low and high bytes and push them
+            pushByte(p, (byte)(intValue & 0xFF));          // Low byte
+            pushByte(p, (byte)((intValue >> 8) & 0xFF));   // High byte
+            pushByte(p, INT);    
+            break;
+        case FLOAT:
+            pushFloat(p, (float)var);  // Cast int to float if needed
+            break;
+        default:
+            Serial.println(F("Error: Unknown type for pushing back onto stack"));
+            return;
+    }
+}
+
 
 
 bool readToken(char Buffer[]) {

@@ -1,27 +1,2 @@
-"test" SET a
-"test" SET b
-"test" SET c
-"test" SET d
-"test" SET e
-"test" SET f
-"test" SET g
-"test" SET h
-"test" SET i
-"test" SET j
-
-
-
-
-GET a PRINTLN 
-GET b PRINTLN
-GET c PRINTLN 
-GET d PRINTLN
-GET e PRINTLN 
-GET f PRINTLN
-GET g PRINTLN 
-GET h PRINTLN
-GET i PRINTLN 
-GET j PRINTLN
-
-
+INT 0x00 0x05 PRINT
 STOP
