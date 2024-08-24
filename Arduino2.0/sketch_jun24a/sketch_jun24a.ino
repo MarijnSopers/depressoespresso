@@ -666,7 +666,6 @@ int popInt(Process &p) {
     return value;
 }
 
-
 void pushFloat(Process &p, float f) {
     byte* b = (byte*)&f;
     for (int i = sizeof(float) - 1; i >= 0; i--) {
@@ -677,12 +676,24 @@ void pushFloat(Process &p, float f) {
 
 float popFloat(Process &p) {
     byte b[sizeof(float)];
+
+    // Read bytes from the process and store them in the array
     for (int i = sizeof(float) - 1; i >= 0; i--) {
         b[i] = popByte(p);
     }
-    float* f = (float*)b;
-    return *f;
+    
+    // Convert byte array to float
+    float result;
+    byte* pFloat = reinterpret_cast<byte*>(&result);
+
+    // Ensure byte order matches float representation
+    for (int i = 0; i < sizeof(float); i++) {
+        pFloat[i] = b[sizeof(float) - 1 - i]; // Reverse order if necessary
+    }
+
+    return result;
 }
+
 
 void pushString(Process &p, const char* string) {
     int length = strlen(string );
@@ -717,11 +728,13 @@ char* popString(Process &p) {
 }
 
 void setVar(const char* name, int processID) {
+    Serial.print(F("Debug: Setting variable with name: "));
+    Serial.println(name);
+    Serial.print(F("Debug: Process ID: "));
+    Serial.println(processID);
+
+
     Process* processPointer = &processes[processID]; 
-    if (processID < 0 || processID >= MAXPROCESSES) {
-        Serial.println(F("Error: Invalid process ID"));
-        return;
-    }
 
     if (noOfVars >= MAX_VARS) {
         Serial.println(F("Error: No space in memory table"));
@@ -729,18 +742,31 @@ void setVar(const char* name, int processID) {
     }
 
     // Remove existing variable if it exists
+    bool found = false;
     for (int i = 0; i < noOfVars; i++) {
         if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
+            Serial.print(F("Debug: Removing existing variable at index: "));
+            Serial.println(i);
             for (int j = i; j < noOfVars - 1; j++) {
                 memoryTable[j] = memoryTable[j + 1];
             }
             noOfVars--;
+            found = true;
             break;
         }
     }
 
+    if (found) {
+        Serial.println(F("Debug: Existing variable removed successfully"));
+    } else {
+        Serial.println(F("Debug: No existing variable found to remove"));
+    }
+
     byte type = popByte(*processPointer);
     int size = 0;
+
+    Serial.print(F("Debug: Variable type retrieved: "));
+    Serial.println(type);
 
     switch (type) {
         case CHAR:
@@ -760,7 +786,13 @@ void setVar(const char* name, int processID) {
             return;
     }
 
+    Serial.print(F("Debug: Variable size determined: "));
+    Serial.println(size);
+
     int address = findFreeSpaceInMemoryTable(size);
+
+    Serial.print(F("Debug: Free space found at address: "));
+    Serial.println(address);
 
     if (noOfVars < MAX_VARS) {
         strncpy(memoryTable[noOfVars].name, name, sizeof(memoryTable[noOfVars].name) - 1);
@@ -770,49 +802,88 @@ void setVar(const char* name, int processID) {
         memoryTable[noOfVars].type = type;
         memoryTable[noOfVars].address = address;
 
+        Serial.println(F("Debug: Memory table updated with new variable"));
+
         for (int i = size - 1; i >= 0; i--) {
-            memory[address + i] = popByte(*processPointer);
+            byte value = popByte(*processPointer);
+            memory[address + i] = value;
+            Serial.print(F("Debug: Storing byte value "));
+            Serial.print(value);
+            Serial.print(F(" at memory address "));
+            Serial.println(address + i);
         }
         noOfVars++;
+        Serial.println(F("Debug: Variable successfully added to memory table"));
     } else {
         Serial.println(F("Error: No space in memory table"));
     }
 }
 
 
+
 void getVar(const char* name, int processID) {
+    Serial.print(F("Debug: Getting variable with name: "));
+    Serial.println(name[0]);
+    Serial.print(F("Debug: Process ID: "));
+    Serial.println(processID);
+
     int address = -1;
     if (processID < 0 || processID >= MAXPROCESSES) {
         Serial.println(F("Error: Invalid process ID"));
         return;
     }
 
-    Process* processPointer = &processes[processID]; 
+    Process* processPointer = &processes[processID];
 
+    bool found = false;
     for (int i = 0; i < noOfVars; i++) {
+        Serial.print(F("Debug: Checking variable at index "));
+        Serial.print(i);
+        Serial.print(F(" with name: "));
+        Serial.println(memoryTable[i].name);
+        Serial.print(F("Debug: Process ID for this variable: "));
+        Serial.println(memoryTable[i].processID);
+
         if (strcmp(memoryTable[i].name, name) == 0 && memoryTable[i].processID == processID) {
+            Serial.println(F("Debug: Variable found"));
+
             address = memoryTable[i].address;
             int size = memoryTable[i].size;
             byte type = memoryTable[i].type;
 
             for (int j = 0; j < size; j++) {
-                pushByte(*processPointer, memory[address + j]);
+                byte value = memory[address + j];
+                pushByte(*processPointer, value);
+                Serial.print(F("Debug: Pushed byte value "));
+                Serial.print(value);
+                Serial.print(F(" to process stack"));
+                Serial.print(F(" (Address: "));
+                Serial.print(address + j);
+                Serial.println(F(")"));
             }
 
             if (type == STRING) {
                 pushByte(*processPointer, size);
+                Serial.print(F("Debug: Pushed string size "));
+                Serial.println(size);
             }
 
             pushByte(*processPointer, type);
-            printStack(*processPointer);
+            Serial.print(F("Debug: Pushed variable type "));
+            Serial.println(type);
 
+            printStack(*processPointer);
             Serial.println(F("Variable pushed back onto the stack."));
-            return;
+            found = true;
+            break;
         }
     }
 
-    Serial.println(F("Error: Variable not found"));
+    if (!found) {
+        Serial.println(F("Error: Variable not found"));
+    }
 }
+
 
 
 void runProcesses() {
@@ -833,14 +904,8 @@ void execute(int processIndex) {
     byte instruction = EEPROM.read(address + pc);
     p.pc += 1;  // Move PC to the next instruction
 
-    // Serial.print(F("Executing instruction at PC: "));
-    // Serial.println(pc);
-    // Serial.print(F("Instruction code: "));
-    // Serial.println(instruction);
-
     switch (instruction) {
         case CHAR: {
-
             char value = EEPROM.read(address + p.pc);
             p.pc += 1;
             pushChar(p, value);
@@ -852,15 +917,29 @@ void execute(int processIndex) {
             pushInt(p, value);
             break;
       }
-        case FLOAT: {
-            float value;
-            byte* bytePointer = (byte*)&value;
-            for (int i = 0; i < sizeof(float); i++) {
-                bytePointer[i] = EEPROM.read(address + p.pc++);
-            }
-            pushFloat(p, value);
-            break;
-        }
+      case FLOAT: {
+          float value;
+          byte* bytePointer = (byte*)&value;
+
+          // Read in the correct order (little-endian)
+          for (int i = 3; i >= 0; i--) {
+              bytePointer[i] = EEPROM.read(address + p.pc++);
+          }
+
+          Serial.print(F("Float bytes: "));
+          for (int i = 0; i < 4; i++) {
+              Serial.print(bytePointer[i]);
+              Serial.print(" ");
+          }
+          Serial.println();
+
+          Serial.print(F("Float value: "));
+          Serial.println(value);
+
+          pushFloat(p, value);
+
+          break;
+      }
         case STRING: {
             String str = "";
             char ch;
@@ -881,12 +960,11 @@ void execute(int processIndex) {
                     Serial.print(popInt(p));
                     break;
                 case FLOAT:
-                    Serial.print(popFloat(p), 6);   
+                    Serial.print(popFloat(p));   
                     break;
-                case STRING: {
+                case STRING: 
                     Serial.print(popString(p));
                     break;
-                }
                 default:
                     Serial.println(F("Error: Unknown type in PRINT"));
                     break;
@@ -905,23 +983,33 @@ void execute(int processIndex) {
                     Serial.println(popInt(p));
                     break;
                 case FLOAT:
+                    Serial.println("printfloat");
                     Serial.println(popFloat(p));  // Print float with 6 decimal places
                     break;
-                case STRING: {
+                case STRING: 
                     Serial.println(popString(p));
                     break;
-                }
+              
                 default:
                     Serial.println(F("Error: Unknown type in PRINTLN"));
                     break;
             }
             break;
         }
-        case SET: {
-            byte varName = EEPROM.read(address + p.pc++);
-            setVar((char*)&varName, processIndex);
-            break;
-        }
+case SET: {
+    byte varName = EEPROM.read(address + p.pc++);
+    Serial.print(F("Debug: varName: "));
+    Serial.println(varName);
+
+    char varNameStr[2];  
+    varNameStr[0] = varName;  
+    varNameStr[1] = '\0';     
+
+    setVar(varNameStr, processIndex);
+    break;
+}
+
+
         case GET: {
             byte varName = EEPROM.read(address + p.pc++);
             getVar((char*)&varName, processIndex);
