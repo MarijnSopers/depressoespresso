@@ -533,20 +533,22 @@ void resumeProcess(int processID) {
   Serial.println(processes[processIndex].name);
 }
 
-
 void kill() {
-    inputBuffer[0] = 0;
-    char* processid;
+  inputBuffer[0] = 0;    
+  char* processid;
+  while (!readToken(inputBuffer)) {
+    // Serial.println(F("Error: Unknown filename"));
+    // return;
+    processid = inputBuffer;
+  }
 
-    // Read the process ID token from the input buffer
-    while (!readToken(inputBuffer)) {
-        processid = inputBuffer;
-    }
+  int processID = atoi(processid);
+  killProcess(processID);
+}
 
-    int processID = atoi(processid);
+
+void killProcess(int processID) {
     int processIndex = -1;
-
-    // Search for the process with the given process ID
     for (int i = 0; i < noOfProcesses; i++) {
         if (processes[i].processId == processID && processes[i].state != '0') {
             processIndex = i;
@@ -561,7 +563,7 @@ void kill() {
     }
 
     // // Delete any variables associated with this process
-    //deleteVariables(processID);
+    deleteVariables(processID);
 
     // Shift the processes array to remove the terminated process
     for (int i = processIndex; i < noOfProcesses - 1; i++) {
@@ -586,7 +588,6 @@ void show() {
 }
 
 void deleteAllFiles() {
-  //Serial.println(("Deleting all files...");
   for (int i = 0; i < MAX_FILES; i++) {
     FAT[i].name[0] = '\0';
     FAT[i].start = 0;
@@ -597,8 +598,6 @@ void deleteAllFiles() {
   EEPROM.write(160, noOfFiles);
   Serial.println(F("All files deleted successfully."));
 }
-
-
 
 static commandType command[] = {
    { "help", &help },
@@ -837,7 +836,7 @@ void getVar(const char* name, int processID) {
 
             pushByte(*processPointer, type);
 
-            printStack(*processPointer);
+            //printStack(*processPointer); //debug whats in the stack
             found = true;
             break;
         }
@@ -852,21 +851,22 @@ void getVar(const char* name, int processID) {
 
 void runProcesses() {
   for (int i = 0; i < noOfProcesses; i++) {
-    if (processes[i].state == 'r') {  // Check if the process is RUNNING
-      execute(i);                     // Execute the next instruction for this process
-      // delay(200);                     // Delay to allow other operations and avoid overwhelming the CPU
+    if (processes[i].state == 'r') {   
+      execute(i);                      
+      // delay(200);                      
     }
   }
 }
 
 void execute(int processIndex) {
-    Process& p = processes[processIndex];  // Get reference to the process
-    int address = p.fp;  // Frame Pointer
-    int pc = p.pc;       // Program Counter
+    Process& p = processes[processIndex];  
+    int address = p.fp;   
+    int pc = p.pc;       
 
     // Read the instruction from EEPROM
     byte instruction = EEPROM.read(address + pc);
-    p.pc += 1;  // Move PC to the next instruction
+    p.pc += 1;   
+
 
     switch (instruction) {
         case CHAR: {
@@ -888,17 +888,6 @@ void execute(int processIndex) {
             for (int i = 3; i >= 0; i--) {
                 bytePointer[i] = EEPROM.read(address + p.pc++);
             }
-
-            // Serial.print(F("Float bytes: "));
-            // for (int i = 0; i < 4; i++) {
-            //     Serial.print(bytePointer[i]);
-            //     Serial.print(" ");
-            // }
-            // Serial.println();
-
-            // Serial.print(F("Float value: "));
-            // Serial.println(value, 6); // Print float with 6 decimal places
-
             pushFloat(p, value);
             break;
         }
@@ -967,6 +956,18 @@ void execute(int processIndex) {
             getVar((char*)&varName, processIndex);
             break;
         }
+        case PLUS: {
+            Serial.println(F("running plus"));
+            binaryOperator(PLUS, processIndex);
+            break;
+        }
+        case MINUS:
+        {
+
+            Serial.println(F("running minus"));
+            binaryOperator(MINUS, processIndex);
+            break;
+        }
         case INCREMENT: {
            unaireOperator(INCREMENT, processIndex);
             break;
@@ -976,10 +977,7 @@ void execute(int processIndex) {
             break;
         }
         case STOP: {  // Assuming STOP is the instruction code for stopping a process
-            p.state = 's';  // Directly set the state to 's' for stopped
-            Serial.print(F("Process "));
-            Serial.print(processIndex);
-            Serial.println(F(" stopped."));
+            killProcess(p.processId);  // Call killProcess to remove the process
             break;
         }
         default: {
@@ -989,12 +987,77 @@ void execute(int processIndex) {
     }
 }
 
+void binaryOperator(byte operation, int processIndex) {
+    Process& p = processes[processIndex];
+
+    byte type1 = popByte(p); 
+    float value1 = popValueByType(type1, p);  
+
+    byte type2 = popByte(p); 
+    float value2 = popValueByType(type2, p); 
+
+    float result;
+    switch (operation) {
+        case PLUS:
+            result = value2 + value1;  
+            break;
+        case MINUS:
+            result = value2 - value1;
+            break;
+        default:
+            Serial.println(F("Operator not recognized."));
+            return;
+    }
+
+    pushFloat(p, result);  
+}
+
+// Function to pop a value based on its type
+float popValueByType(byte type, Process& p) {
+    switch (type) {
+        case CHAR:
+            return (float)popChar(p);   // Pop 1 byte
+        case INT:
+            return (float)popInt(p);    // Pop 2 bytes
+        case FLOAT:
+            return popFloat(p);         // Pop 4 bytes
+        case STRING:
+            Serial.println(F("Error: Cannot perform arithmetic on STRING type."));
+            return 0.0;  // Return a dummy value, as this should not occur
+        default:
+            Serial.println(F("Error: Unknown type."));
+            return 0.0;
+    }
+}
+
+// // Helper function to print the type
+// void printType(byte type) {
+//     switch (type) {
+//         case CHAR:
+//             Serial.print(F("CHAR"));
+//             break;
+//         case INT:
+//             Serial.print(F("INT"));
+//             break;
+//         case FLOAT:
+//             Serial.print(F("FLOAT"));
+//             break;
+//         case STRING:
+//             Serial.print(F("STRING"));
+//             break;
+//         default:
+//             Serial.print(F("UNKNOWN"));
+//             break;
+//     }
+// }
+
+
 void unaireOperator(byte typeOperator, int index) {
     Process& p = processes[index];  // Access the specific process
 
     byte type = popByte(p);         // Get the type of the value from the stack
     float var;   
-    int intValue;                  // Use int for integer values
+            
 
     // Pop the value from the stack based on its type
     switch (type) {
