@@ -562,9 +562,18 @@ void killProcess(int processID) {
         return;
     }
 
-    // // Delete any variables associated with this process
-    deleteVariables(processID);
-
+    // Step 1: Delete any variables associated with this process
+    for (int i = 0; i < noOfVars; i++) {
+        if (memoryTable[i].processID == processID) {
+            // Remove the variable by shifting subsequent elements
+            for (int j = i; j < noOfVars - 1; j++) {
+                memoryTable[j] = memoryTable[j + 1];
+            }
+            noOfVars--;  // Decrement the variable count
+            i--;         // Adjust index to recheck current position
+        }
+    }
+    
     // Shift the processes array to remove the terminated process
     for (int i = processIndex; i < noOfProcesses - 1; i++) {
         processes[i] = processes[i + 1];
