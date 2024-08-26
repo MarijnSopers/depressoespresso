@@ -972,7 +972,6 @@ void execute(int processIndex) {
         }
         case MINUS:
         {
-
             Serial.println(F("running minus"));
             binaryOperator(MINUS, processIndex);
             break;
@@ -985,14 +984,47 @@ void execute(int processIndex) {
            unaireOperator(DECREMENT, processIndex);
             break;
         }
-        case STOP: {  // Assuming STOP is the instruction code for stopping a process
-            killProcess(p.processId);  // Call killProcess to remove the process
+        case LOOP: {
+          p.loop_start = p.pc;   
+          break;
+        }
+        case ENDLOOP: {
+            p.pc = p.loop_start;   
             break;
         }
+        case MILLIS: {
+            unsigned long currentMillis = millis();
+            pushFloat(p, currentMillis);  
+            break;
+        }
+
+        case STOP: {   
+             killProcess(p.processId);  
+             break;
+        }
+      case DELAYUNTIL: {
+          byte type = popByte(p);
+          float targetMillis = popValueByType(type, p);
+          unsigned long currentMillis = millis();
+
+          if (currentMillis < targetMillis) {
+              pushFloat(p, targetMillis);  
+              p.pc--;  
+  
+          }
+          break;
+      }
+
         default: {
             Serial.println(F("Error: Unknown instruction"));
             break;
         }
+    }
+}
+
+void delays(unsigned long ms) {
+    unsigned long start = millis();
+    while (millis() - start < ms) {
     }
 }
 
