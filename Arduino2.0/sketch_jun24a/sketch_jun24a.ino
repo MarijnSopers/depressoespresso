@@ -919,13 +919,13 @@ void execute(int processIndex) {
             break;
         }
         case PLUS: {
-            Serial.println(F("running plus"));
+            //Serial.println(F("running plus"));
             binaryOperator(PLUS, processIndex);
             break;
         }
         case MINUS:
         {
-            Serial.println(F("running minus"));
+            //Serial.println(F("running minus"));
             binaryOperator(MINUS, processIndex);
             break;
         }
