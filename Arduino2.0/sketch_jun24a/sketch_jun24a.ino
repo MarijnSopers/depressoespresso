@@ -962,6 +962,14 @@ void execute(int processIndex) {
           }
           break;
         }
+        case DELAY: {
+           byte type = popByte(p);   
+           float delayValue = popValueByType(type, p);   
+           //Serial.println(delayValue);
+           delay((unsigned long)delayValue);  
+           break;
+}
+
         case STOP: {   
              killProcess(p.processId);  
              break;
