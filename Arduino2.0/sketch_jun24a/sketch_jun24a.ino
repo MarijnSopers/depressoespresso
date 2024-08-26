@@ -514,15 +514,15 @@ void killProcess(int processID) {
         return;
     }
 
-    for (int i = 0; i < noOfVars; i++) {
-        if (memoryTable[i].processID == processID) {
-            for (int j = i; j < noOfVars - 1; j++) {
-                memoryTable[j] = memoryTable[j + 1];
-            }
-            noOfVars--;
-            i--;
-        }
-    }
+    // for (int i = 0; i < noOfVars; i++) {
+    //     if (memoryTable[i].processID == processID) {
+    //         for (int j = i; j < noOfVars - 1; j++) {
+    //             memoryTable[j] = memoryTable[j + 1];
+    //         }
+    //         noOfVars--;
+    //         i--;
+    //     }
+    // }
     
     for (int i = processIndex; i < noOfProcesses - 1; i++) {
         processes[i] = processes[i + 1];
