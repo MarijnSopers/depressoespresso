@@ -390,7 +390,7 @@ void list() {
     return;
   }
 
-  Serial.println(("Active processes:");
+  Serial.println(F("Active processes:"));
   for (int i = 0; i < noOfProcesses; i++) {
     Serial.print(F("Process "));
     Serial.print(processes[i].name);
@@ -573,12 +573,22 @@ static commandType command[] = {
 };
 static int nCommands = sizeof(command) / sizeof(commandType);
 
+
 void help() {
-  Serial.println(F("Available commands:"));
-  for (int i = 0; i < nCommands; i++) {
-    Serial.println(command[i].name);
-  }
+    Serial.println(F("Here is a list with all available commands:"));
+    Serial.println(F("    help                        prints a list with all commands and their syntax."));
+    Serial.println(F("    store [file] [size] [data]  creates file with specified size and puts data in file."));
+    Serial.println(F("    retrieve [file]             prints the contents of file."));
+    Serial.println(F("    erase [file]                deletes file."));
+    Serial.println(F("    files                       prints a list with all files."));
+    Serial.println(F("    freespace                   prints the free space in the filesystem."));
+    Serial.println(F("    run [file]                  starts the process that is defined in file."));
+    Serial.println(F("    list                        prints a list with all processes."));
+    Serial.println(F("    suspend [id]                pauzes the process with processId id."));
+    Serial.println(F("    resume [id]                 continues the process with processId id."));
+    Serial.println(F("    kill [id]                   stops the process with processId id."));
 }
+
 
 void pushByte(Process &p, byte b) {
     if (p.sp >= STACKSIZE) {
@@ -905,7 +915,7 @@ void execute(int processIndex) {
              byte result = (value1 == value2) ? 1 : 0;  
             Serial.println(result);
  
-            pushInt(p, result);  
+            pushByte(p, result);  
             break;
         }
         case PLUS: {
@@ -952,27 +962,6 @@ void execute(int processIndex) {
           }
           break;
         }
-        case IF: {
-            byte condition = popChar(p);
-
-            if (condition == 1) {
-                p.pc += popByte(p);
-            } else {
-                byte skipBytes = popByte(p);
-                p.pc += skipBytes;
-            }
-            break;
-        }
-        case ELSE: {
-            byte skipBytes = popByte(p);
-            p.pc += skipBytes;
-            break;
-        }
-        case ENDIF: {
-            popChar(p);
-            break;
-        }
-
         case STOP: {   
              killProcess(p.processId);  
              break;
